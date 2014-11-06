@@ -10,6 +10,11 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
 
+#include <pcl/filters/voxel_grid.h>
+#include <pcl_ros/point_cloud.h>
+#include <boost/foreach.hpp>
+#include <pcl/io/pcd_io.h>
+
 typedef pcl::PCLPointCloud2 Cloud2;
 typedef pcl::PointXYZRGB Point;
 typedef pcl::PointCloud<Point> Cloud;
@@ -37,13 +42,27 @@ public:
     }
 
 private:
+
+    void filterVoxelGrid(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
+        Cloud::Ptr output (new Cloud ());
+        Cloud::Ptr tmp_pcl (new Cloud());
+        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
+        pcl::VoxelGrid<Point> sor;
+        sor.setInputCloud(tmp_pcl);
+        sor.setLeafSize (0.01f, 0.01f, 0.01f);
+        sor.filter (*output);
+
+        pcl::toROSMsg(*output, filtered);
+
+    }
+
     void filterHSV(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
         Cloud::Ptr input(new Cloud);
         Cloud::Ptr output(new Cloud);
         Cloud2 tmp_pcl;
         pcl_conversions::toPCL(*pcl_msg, tmp_pcl);
         pcl::fromPCLPointCloud2(tmp_pcl, *input);
-
+/*
         cv::Mat RGBMat, HSVMat;
         if (input->isOrganized()) {
             RGBMat = cv::Mat(input->height, input->width, CV_8UC3);
@@ -70,8 +89,8 @@ private:
         cv::inRange(HSVMat, lower, upper, RGBMat);
 
 
-
-//        pcl::toROSMsg(*output, filtered);
+*/
+        pcl::toROSMsg(*output, filtered);
     }
 
     float hmin, smin, vmin, hmax, smax, vmax;
