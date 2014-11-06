@@ -12,9 +12,8 @@
 
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
-#include <boost/foreach.hpp>
-#include <pcl/io/pcd_io.h>
 
+#include <pcl/filters/statistical_outlier_removal.h>
 typedef pcl::PCLPointCloud2 Cloud2;
 typedef pcl::PointXYZRGB Point;
 typedef pcl::PointCloud<Point> Cloud;
@@ -42,6 +41,20 @@ public:
     }
 
 private:
+    void statistical_Outlair_Removal(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
+        Cloud::Ptr output (new Cloud ());
+        Cloud::Ptr tmp_pcl (new Cloud());
+        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
+
+
+        pcl::StatisticalOutlierRemoval<Point> sor;
+        sor.setInputCloud (tmp_pcl);
+        sor.setMeanK (50);
+        sor.setStddevMulThresh (1.0);
+        sor.filter (*output);
+        pcl::toROSMsg(*output, filtered);
+
+    }
 
     void filterVoxelGrid(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
         Cloud::Ptr output (new Cloud ());
