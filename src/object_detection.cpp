@@ -12,6 +12,10 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
 
+#include <pcl/filters/voxel_grid.h>
+#include <pcl_ros/point_cloud.h>
+
+#include <pcl/filters/statistical_outlier_removal.h>
 typedef pcl::PCLPointCloud2 Cloud2;
 typedef pcl::PointXYZRGB Point;
 typedef pcl::PointCloud<Point> Cloud;
@@ -32,12 +36,52 @@ public:
 
     }
     void imageCb(const sensor_msgs::PointCloud2ConstPtr& pcl_msg) {
+
+//        filterHSV(pcl_msg, filtered_pcl);
+
+//        filterVoxelGrid(pcl_msg, filtered_pcl);
+//        sensor_msgs::PointCloud2ConstPtr temp;
+//        temp.reset(&filtered_pcl);
+//        statistical_Outlair_Removal(temp, result);
         sensor_msgs::PointCloud2 filtered_pcl;
-        filterHSV(pcl_msg, filtered_pcl);
+        Cloud::Ptr tmp_pcl (new Cloud());
+        Cloud::Ptr result  (new Cloud());
+        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
+        filterVoxelGrid(tmp_pcl,result);
+        statistical_Outlair_Removal(result,result);
+        pcl::toROSMsg(*result, filtered_pcl);
         vis_pub.publish(filtered_pcl);
     }
 
 private:
+    void statistical_Outlair_Removal(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
+//        Cloud::Ptr output (new Cloud ());
+//        Cloud::Ptr tmp_pcl (new Cloud());
+//        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
+
+
+        pcl::StatisticalOutlierRemoval<Point> sor;
+        sor.setInputCloud (pcl_msg);
+        sor.setMeanK (30);
+        sor.setStddevMulThresh (1.0);
+        sor.filter (*filtered);
+//        pcl::toROSMsg(*output, filtered);
+
+    }
+
+    void filterVoxelGrid(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
+//        Cloud::Ptr output (new Cloud ());
+//        Cloud::Ptr tmp_pcl (new Cloud());
+//        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
+        pcl::VoxelGrid<Point> sor;
+        sor.setInputCloud(pcl_msg);
+        sor.setLeafSize (0.005f, 0.005f, 0.005f);
+        sor.filter (*filtered);
+
+//        pcl::toROSMsg(*output, filtered);
+
+    }
+
     void filterHSV(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
         Cloud::Ptr input(new Cloud);
         Cloud::Ptr output(new Cloud);
@@ -72,13 +116,13 @@ private:
         cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
         cv::inRange(HSVMat, lower, upper, RGBMat);
 
-
         cv::imshow("Display window", RGBMat);
         cv::waitKey(1);
 
 
 
 //        pcl::toROSMsg(*output, filtered);
+
     }
 
     float hmin, smin, vmin, hmax, smax, vmax;

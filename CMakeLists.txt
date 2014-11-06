@@ -22,7 +22,15 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+#get_cmake_property(_variableNames VARIABLES)
+#foreach (_variableName ${_variableNames})
+#    message(STATUS "${_variableName}=${${_variableName}}")
+#endforeach()
+
+#list(APPEND catkin_LIBRARIES /opt/ros/hydro/lib/libopencv_core.so /opt/ros/hydro/lib/libopencv_imgproc.so)
+
+
 add_executable(object_detection src/object_detection.cpp)
-target_link_libraries(object_detection ${catkin_LIBRARIES})
+target_link_libraries(object_detection ${catkin_LIBRARIES} /opt/ros/hydro/lib/libopencv_core.so /opt/ros/hydro/lib/libopencv_imgproc.so /opt/ros/hydro/lib/libopencv_highgui.so)
 #add_executable(object_recognition src/object_recoginition.cpp)
 #target_link_libraries(object_recognition ${catkin_LIBRARIES})
