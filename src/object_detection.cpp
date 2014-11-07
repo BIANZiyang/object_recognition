@@ -134,32 +134,50 @@ private:
     }
 
     void filterHSV(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-        cv::Mat RGBMat, HSVMat;
-        if (pcl_msg->isOrganized()) {
-            ROS_INFO("WUT");
-            RGBMat = cv::Mat(pcl_msg->height, pcl_msg->width, CV_8UC3);
+        cv::Mat RGBMat(1, pcl_msg->size(), CV_8UC3);
+        cv::Mat resMat(1, pcl_msg->size(), CV_8U);
+        cv::Mat HSVMat;
 
-            if (!pcl_msg->empty()) {
-                for (int h=0; h<RGBMat.rows; h++) {
-                    for (int w=0; w<RGBMat.cols; w++) {
-                        Point point = pcl_msg->at(w, h);
-
-                        Eigen::Vector3i rgb = point.getRGBVector3i();
-
-                        RGBMat.at<cv::Vec3b>(h,w)[0] = rgb[2];
-                        RGBMat.at<cv::Vec3b>(h,w)[1] = rgb[1];
-                        RGBMat.at<cv::Vec3b>(h,w)[2] = rgb[0];
-                    }
-                }
-            }
-            cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
-            cv::inRange(HSVMat, lower, upper, RGBMat);
-
-            cv::imshow("Display window", RGBMat);
-            cv::waitKey(1);
+        int i = 0;
+        for(Cloud::iterator start = pcl_msg->begin(); start != pcl_msg->end(); ++start) {
+            Eigen::Vector3i rgb = start->getRGBVector3i();
+            RGBMat.at<cv::Vec3b>(0, i)[0] = rgb[2];
+            RGBMat.at<cv::Vec3b>(0, i)[1] = rgb[1];
+            RGBMat.at<cv::Vec3b>(0, i)[2] = rgb[0];
         }
 
-        ROS_INFO("pcl_msg size: %d RGBMat size: (%d, %d)", pcl_msg->size(), RGBMat.rows, RGBMat.cols);
+//        if (pcl_msg->isOrganized()) {
+//            ROS_INFO("WUT");
+//            RGBMat = cv::Mat(pcl_msg->height, pcl_msg->width, CV_8UC3);
+
+//            if (!pcl_msg->empty()) {
+//                for (int h=0; h<RGBMat.rows; h++) {
+//                    for (int w=0; w<RGBMat.cols; w++) {
+//                        Point point = pcl_msg->at(w, h);
+
+//                        Eigen::Vector3i rgb = point.getRGBVector3i();
+
+//                        RGBMat.at<cv::Vec3b>(h,w)[0] = rgb[2];
+//                        RGBMat.at<cv::Vec3b>(h,w)[1] = rgb[1];
+//                        RGBMat.at<cv::Vec3b>(h,w)[2] = rgb[0];
+//                    }
+//                }
+//            }
+//        }
+        cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
+        cv::inRange(HSVMat, lower, upper, resMat);
+
+//        std::vector<int> indices;
+//        for(i = 0; i < pcl_msg->size(); i++) {
+//            if(resMat.at(0, i)) indices.push_back(i);
+//        }
+
+//        filtered = Cloud(pcl_msg, indices);
+
+//        cv::imshow("Display window", RGBMat);
+//        cv::waitKey(1);
+
+        //ROS_INFO("pcl_msg size: %d RGBMat size: (%d, %d)", pcl_msg->size(), RGBMat.rows, RGBMat.cols);
 
 
     }
