@@ -16,6 +16,10 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
+#include <opencv2/highgui/highgui.hpp>
+
+
+
 #include <pcl/filters/statistical_outlier_removal.h>
 typedef pcl::PCLPointCloud2 Cloud2;
 typedef pcl::PointXYZRGB Point;
@@ -29,6 +33,13 @@ public:
         pcl_sub = nh.subscribe("/camera/depth_registered/points", 1, &object_detection::imageCb, this);
         vis_pub = nh.advertise<sensor_msgs::PointCloud2>("/object_recognition/deteciton", 1);
         load_from_launchfile();
+        cv::namedWindow("HSVTrackbars",1);
+        cv::createTrackbar("Hmin","HSVTrackbars",&hmin,179);
+        cv::createTrackbar("Hmax","HSVTrackbars",&hmax,179);
+        cv::createTrackbar("Smin","HSVTrackbars",&smin,255);
+        cv::createTrackbar("Smax","HSVTrackbars",&smax,255);
+        cv::createTrackbar("Vmin","HSVTrackbars",&vmin,255);
+        cv::createTrackbar("Vmax","HSVTrackbars",&vmax,255);
     }
     void load_from_launchfile(){
         voxelsize=0.005;
@@ -179,12 +190,12 @@ private:
 
         //ROS_INFO("pcl_msg size: %d RGBMat size: (%d, %d)", pcl_msg->size(), RGBMat.rows, RGBMat.cols);
 
-
     }
 
     cv::Scalar lower, upper;
     Eigen::Vector4f minVal, maxVal;
-    double hmin, smin, vmin, hmax, smax, vmax, voxelsize;
+    int hmin, smin, vmin, hmax, smax, vmax;
+    double voxelsize;
     ros::Subscriber pcl_sub;
     ros::Publisher vis_pub;
     ros::NodeHandle nh;
