@@ -12,6 +12,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
 
+#include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
@@ -27,76 +28,121 @@ public:
     object_detection() {
         pcl_sub = nh.subscribe("/camera/depth_registered/points", 1, &object_detection::imageCb, this);
         vis_pub = nh.advertise<sensor_msgs::PointCloud2>("/object_recognition/deteciton", 1);
+        load_from_launchfile();
+    }
+    void load_from_launchfile(){
+        voxelsize=0.005;
         hmin=0;
         hmax=120;
         smin=0;
         smax=255;
         vmin=0;
         vmax=255;
+        double temp_leafsize;
+        double depth = 0.3, height = 0.3, width = 0.3, heightOffset = 0.3, depthOffset = 0.1;
+        if(nh.hasParam("object_detection/leafsize")) {nh.getParam("object_detection/leafsize", temp_leafsize); voxelsize=temp_leafsize;}
+        if(nh.hasParam("object_detection/depth")) {nh.getParam("object_detection/depth", depth);}
+        if(nh.hasParam("object_detection/height")) {nh.getParam("object_detection/height", height);}
+        if(nh.hasParam("object_detection/width")) {nh.getParam("object_detection/width", width);}
+        if(nh.hasParam("object_detection/heightOffset")) {nh.getParam("object_detection/heightOffset", heightOffset);}
+        if(nh.hasParam("object_detection/depthOffset")) {nh.getParam("object_detection/depthOffset", depthOffset);}
+
+        if(nh.hasParam("object_detection/hmin")) {nh.getParam("object_detection/hmin", hmin);}
+        if(nh.hasParam("object_detection/hmax")) {nh.getParam("object_detection/hmax", hmax);}
+        if(nh.hasParam("object_detection/smin")) {nh.getParam("object_detection/smin", smin);}
+        if(nh.hasParam("object_detection/smax")) {nh.getParam("object_detection/smax", smax);}
+        if(nh.hasParam("object_detection/vmin")) {nh.getParam("object_detection/vmin", vmin);}
+        if(nh.hasParam("object_detection/vmax")) {nh.getParam("object_detection/vmax", vmax);}
+
+
+        //Order of params: width, height, depth
+        minVal[0] = -width/2;
+        minVal[1] = -height/2 - heightOffset;
+        minVal[2] = -depth/2 + depthOffset;
+        maxVal[0] = width/2;
+        maxVal[1] = height/2 - heightOffset;
+        maxVal[2] = depth/2 + depthOffset;
+        lower[0] = hmin;
+        lower[1] = smin;
+        lower[2] = vmin;
+        upper[0] = hmax;
+        upper[1] = smax;
+        upper[2] = vmax;
+
 
     }
+
     void imageCb(const sensor_msgs::PointCloud2ConstPtr& pcl_msg) {
+        ros::Time Begin_of_callback_image_time = ros::Time::now();
 
-//        filterHSV(pcl_msg, filtered_pcl);
-
-//        filterVoxelGrid(pcl_msg, filtered_pcl);
-//        sensor_msgs::PointCloud2ConstPtr temp;
-//        temp.reset(&filtered_pcl);
-//        statistical_Outlair_Removal(temp, result);
         sensor_msgs::PointCloud2 filtered_pcl;
         Cloud::Ptr tmp_pcl (new Cloud());
         Cloud::Ptr result  (new Cloud());
         pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
-        filterVoxelGrid(tmp_pcl,result);
+        ros::Time begin = ros::Time::now();
+        filter_crop_box(tmp_pcl, result);
+        ros::Time end = ros::Time::now();
+        std::cout << "Crop Time: " << end-begin << std::endl;
+
+
+        begin = ros::Time::now();
+        filterVoxelGrid(result, result);
+        end = ros::Time::now();
+        std::cout << "voxel time: " << end-begin << std::endl;
+
+
+        begin = ros::Time::now();
         statistical_Outlair_Removal(result,result);
+        end = ros::Time::now();
+        std::cout << "Statistical Outlair Time: " << end-begin << std::endl;
+
+        begin = ros::Time::now();
+        filterHSV(result,result);
+        end = ros::Time::now();
+        std::cout << "HSV filter time: " << end-begin << std::endl;
+
         pcl::toROSMsg(*result, filtered_pcl);
         vis_pub.publish(filtered_pcl);
+
+        ros::Time End_of_callback_image_time = ros::Time::now();
+        std::cout << "total time: " << End_of_callback_image_time-Begin_of_callback_image_time << std::endl;
+
     }
 
 private:
+    void filter_crop_box(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
+        pcl::CropBox<Point> cb;
+        cb.setMin(minVal);
+        cb.setMax(maxVal);
+        cb.setInputCloud(pcl_msg);
+        cb.filter(*filtered);
+    }
+
     void statistical_Outlair_Removal(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-//        Cloud::Ptr output (new Cloud ());
-//        Cloud::Ptr tmp_pcl (new Cloud());
-//        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
-
-
         pcl::StatisticalOutlierRemoval<Point> sor;
         sor.setInputCloud (pcl_msg);
-        sor.setMeanK (30);
+        sor.setMeanK (10);
         sor.setStddevMulThresh (1.0);
         sor.filter (*filtered);
-//        pcl::toROSMsg(*output, filtered);
-
     }
 
     void filterVoxelGrid(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-//        Cloud::Ptr output (new Cloud ());
-//        Cloud::Ptr tmp_pcl (new Cloud());
-//        pcl::fromROSMsg(*pcl_msg, *tmp_pcl);
         pcl::VoxelGrid<Point> sor;
         sor.setInputCloud(pcl_msg);
-        sor.setLeafSize (0.005f, 0.005f, 0.005f);
+        sor.setLeafSize (voxelsize, voxelsize, voxelsize);
         sor.filter (*filtered);
-
-//        pcl::toROSMsg(*output, filtered);
-
     }
 
-    void filterHSV(const sensor_msgs::PointCloud2ConstPtr& pcl_msg, sensor_msgs::PointCloud2& filtered){
-        Cloud::Ptr input(new Cloud);
-        Cloud::Ptr output(new Cloud);
-        Cloud2 tmp_pcl;
-        pcl_conversions::toPCL(*pcl_msg, tmp_pcl);
-        pcl::fromPCLPointCloud2(tmp_pcl, *input);
-
+    void filterHSV(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
         cv::Mat RGBMat, HSVMat;
-        if (input->isOrganized()) {
-            RGBMat = cv::Mat(input->height, input->width, CV_8UC3);
+        if (pcl_msg->isOrganized()) {
+            ROS_INFO("WUT");
+            RGBMat = cv::Mat(pcl_msg->height, pcl_msg->width, CV_8UC3);
 
-            if (!input->empty()) {
+            if (!pcl_msg->empty()) {
                 for (int h=0; h<RGBMat.rows; h++) {
                     for (int w=0; w<RGBMat.cols; w++) {
-                        Point point = input->at(w, h);
+                        Point point = pcl_msg->at(w, h);
 
                         Eigen::Vector3i rgb = point.getRGBVector3i();
 
@@ -106,26 +152,21 @@ private:
                     }
                 }
             }
+            cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
+            cv::inRange(HSVMat, lower, upper, RGBMat);
+
+            cv::imshow("Display window", RGBMat);
+            cv::waitKey(1);
         }
 
-        ROS_INFO("pcl_msg size: %d RGBMat size: (%d, %d)", input->size(), RGBMat.rows, RGBMat.cols);
+        ROS_INFO("pcl_msg size: %d RGBMat size: (%d, %d)", pcl_msg->size(), RGBMat.rows, RGBMat.cols);
 
-
-        cv::Scalar lower(207/2-20, 45*2.55, 70*2.55);
-        cv::Scalar upper(207/2+20, 55*2.55, 80*2.55);
-        cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
-        cv::inRange(HSVMat, lower, upper, RGBMat);
-
-        cv::imshow("Display window", RGBMat);
-        cv::waitKey(1);
-
-
-
-//        pcl::toROSMsg(*output, filtered);
 
     }
 
-    float hmin, smin, vmin, hmax, smax, vmax;
+    cv::Scalar lower, upper;
+    Eigen::Vector4f minVal, maxVal;
+    double hmin, smin, vmin, hmax, smax, vmax, voxelsize;
     ros::Subscriber pcl_sub;
     ros::Publisher vis_pub;
     ros::NodeHandle nh;
