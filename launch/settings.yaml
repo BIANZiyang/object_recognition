@@ -3,11 +3,11 @@ object_detection:
     height: 1
     depth: 1.5
     heightOffset: -0.2
-    depthOffset: 0.75
+    depthOffset: 0.5
     leafsize: 0.005
-    hmin: 120
-    hmax: 160
-    smin: 50
-    smax: 255
+    hmin: 0
+    hmax: 180
+    smin: 0
+    smax: 160
     vmin: 0
     vmax: 255

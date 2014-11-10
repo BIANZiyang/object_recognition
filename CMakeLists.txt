@@ -31,6 +31,6 @@ include_directories(
 
 
 add_executable(object_detection src/object_detection.cpp)
-target_link_libraries(object_detection ${catkin_LIBRARIES} /opt/ros/hydro/lib/libopencv_core.so /opt/ros/hydro/lib/libopencv_imgproc.so /opt/ros/hydro/lib/libopencv_highgui.so)
+target_link_libraries(object_detection ${catkin_LIBRARIES} /opt/ros/hydro/lib/libopencv_core.so /opt/ros/hydro/lib/libopencv_imgproc.so /opt/ros/hydro/lib/libopencv_highgui.so /opt/ros/hydro/lib/libimage_transport.so /opt/ros/hydro/lib/libcv_bridge.so)
 #add_executable(object_recognition src/object_recoginition.cpp)
 #target_link_libraries(object_recognition ${catkin_LIBRARIES})
