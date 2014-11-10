@@ -1,0 +1,13 @@
+object_detection:
+    width: 1
+    height: 1
+    depth: 1.5
+    heightOffset: -0.2
+    depthOffset: 0.5
+    leafsize: 0.005
+    hmin: 0
+    hmax: 180
+    smin: 0
+    smax: 160
+    vmin: 0
+    vmax: 255
