@@ -1,23 +1,62 @@
 #include <ros/ros.h>
-
+#include <cstdio>
 #include <iostream>
 #include <ostream>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgproc/types_c.h>
 
 enum Objects { REDCUBE,BLUECUBE,GREENCUBE,YELLOWCUBE,YELLOWBALL,REDBALL,GREENCYLINDER,BLUETRIANGLE,PURPLECROSS,PATRIC };
 class object_recognition{
 public:
     object_recognition(){
         //pcl_sub = nh.subscribe("/object_recognition/image", 1, &object_recognition::recognitionCb, this);
+        sample_image_count=10;
     }
     void recognitionCB(){
-
-
 
 
         Object_output(REDCUBE);
     }
 
+    void train_Bayes_Classifier(){
+        cv::Mat trainData(sample_image_count,(sample_size_x*sample_size_y*2),CV_32FC1);
+        cv::Mat responses(sample_image_count,1,CV_32SC1);
+        for(int i=0;i<sample_image_count;i++){
+            std::stringstream ss ;
+            ss << i << "sample.ppm" ;
+
+            cv::Mat image= cv::imread(ss.str());
+            //Class 0 will be no object, Class 1 will be object 1, class 2 object 2 ...
+            if(i<5){
+                responses.at<int>(i)=0;
+            }
+            else{
+                responses.at<int>(i)=1;
+            }
+            for(int y=0;y<sample_size_y;y++){
+                for (int x=0;x<sample_size_x;x++){
+                    trainData.at<float>(i,(y*sample_size_x*2+x*2))=image.at<cv::Vec3b>(x,y)[0];
+                    trainData.at<float>(i,(y*sample_size_x*2+x*2+1))=image.at<cv::Vec3b>(x,y)[1];
+                }
+            }
+        }
+
+        cv::NormalBayesClassifier bc;
+        bc.train(trainData,responses);
+    }
+
 private:
+    void reshape_image(cv::Mat& src, cv::Mat& dst ){
+        cv::Size dsize = cv::Size(sample_size_x,sample_size_y);
+        cv::resize(src,dst,dsize,cv::INTER_AREA);
+        cv::namedWindow("Display Window");
+        imshow("Display Window",dst);
+        cv::waitKey();
+    }
+
     void Object_output(Objects const detected){
         std::string output;
         switch(detected){
@@ -35,6 +74,11 @@ private:
         }
         std::cout << output;
     }
+
+    int sample_image_count;
+    static const int sample_size_x = 100;
+    static const int sample_size_y = 100;
+    cv::NormalBayesClassifier bc;
 };
 
 
