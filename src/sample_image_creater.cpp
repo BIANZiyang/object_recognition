@@ -53,7 +53,9 @@ public:
             return;
         }
         std::cout<< "Reached the convertion"<< std::endl;
-        cv::cvtColor(cv_ptr->image,image, CV_BGR2HSV);
+
+        cv::medianBlur(cv_ptr->image, image, 9);
+        cv::cvtColor(image,image, CV_BGR2HSV);
 
         std::cout<< "Done the convertion"<< std::endl;
         cv::imshow("Display window",image);
