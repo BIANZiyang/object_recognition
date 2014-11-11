@@ -22,11 +22,13 @@ public:
     }
 
     void train_Bayes_Classifier(){
+        std::cout << "Try to allocate disk space"<< std::endl;
         cv::Mat trainData(sample_image_count,(sample_size_x*sample_size_y*2),CV_32FC1);
         cv::Mat responses(sample_image_count,1,CV_32SC1);
+        std::cout <<" allocated disk space"<< std::endl;
         for(int i=0;i<sample_image_count;i++){
             std::stringstream ss ;
-            ss << i << "sample.ppm" ;
+            ss << "sample_images/"<< i << "sample.ppm" ;
 
             cv::Mat image= cv::imread(ss.str());
             //Class 0 will be no object, Class 1 will be object 1, class 2 object 2 ...
@@ -43,9 +45,12 @@ public:
                 }
             }
         }
-
+        std::cout << "loaded Data"<< std::endl;
         cv::NormalBayesClassifier bc;
+        std::cout << "Try to train"<< std::endl;
+
         bc.train(trainData,responses);
+        std::cout<< "Training succeded"<< std::endl;
     }
 
 private:
@@ -76,8 +81,8 @@ private:
     }
 
     int sample_image_count;
-    static const int sample_size_x = 100;
-    static const int sample_size_y = 100;
+    static const int sample_size_x = 10;
+    static const int sample_size_y = 10;
     cv::NormalBayesClassifier bc;
 };
 
@@ -86,8 +91,9 @@ private:
 
 
 int main(int argc, char** argv){
-    ros::init(argc, argv, "object_detection");
+    ros::init(argc, argv, "object_recognition");
     object_recognition object_rec;
-    ros::spin();
-
+    object_rec.train_Bayes_Classifier();
+    //ros::spin();
+    //object_rec.recognitionCB();
 }
