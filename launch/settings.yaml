@@ -5,9 +5,15 @@ object_detection:
     heightOffset: -0.2
     depthOffset: 0.5
     leafsize: 0.005
-    hmin: 0
-    hmax: 180
-    smin: 0
-    smax: 160
-    vmin: 0
-    vmax: 255
+    hmin1: 0
+    hmax1: 180
+    smin1: 0
+    smax1: 180
+    vmin1: 56
+    vmax1: 255
+    hmin2: 43
+    hmax2: 180
+    smin2: 65
+    smax2: 255
+    vmin2: 0
+    vmax2: 255

@@ -89,7 +89,7 @@ public:
 
             myClass->reshape_image(myClass->cropped,result);
             std::stringstream ss;
-            ss<< "sample_images/"<<myClass->samplenumber<<"sample.ppm";
+            ss<< myClass->samplenumber<<"sample.ppm";
             while(!myClass->exists_test3(ss.str())){
                 std::cout<<"File allready exists";
                 myClass->samplenumber++;

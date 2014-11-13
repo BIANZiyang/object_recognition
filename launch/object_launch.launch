@@ -4,4 +4,5 @@
 	</include>
 	<rosparam command="load" file="$(find object_recognition)/launch/settings.yaml" />	
     <node pkg="object_recognition" type="object_detection" name="object_detection" output="screen" />
+    <node pkg="object_recognition" type="object_recognition" name="object_recognition" output="screen" />
 </launch>

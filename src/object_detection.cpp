@@ -35,6 +35,7 @@ public:
         //pcl_sub = nh.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
         //vis_pub = nh.advertise<sensor_msgs::PointCloud2>("/object_recognition/deteciton", 1);
         img_sub = _it.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+        img_pub = _it.advertise("/object_recognition/filtered_image",1);
         load_from_launchfile();
         cv::namedWindow("HSVTrackbars",CV_WINDOW_NORMAL);
         cv::createTrackbar("Hmin1","HSVTrackbars",&hmin1,180);
@@ -68,12 +69,18 @@ public:
         if(nh.hasParam("object_detection/heightOffset")) {nh.getParam("object_detection/heightOffset", heightOffset);}
         if(nh.hasParam("object_detection/depthOffset")) {nh.getParam("object_detection/depthOffset", depthOffset);}
 
-        if(nh.hasParam("object_detection/hmin")) {nh.getParam("object_detection/hmin", hmin1);}
-        if(nh.hasParam("object_detection/hmax")) {nh.getParam("object_detection/hmax", hmax1);}
-        if(nh.hasParam("object_detection/smin")) {nh.getParam("object_detection/smin", smin1);}
-        if(nh.hasParam("object_detection/smax")) {nh.getParam("object_detection/smax", smax1);}
-        if(nh.hasParam("object_detection/vmin")) {nh.getParam("object_detection/vmin", vmin1);}
-        if(nh.hasParam("object_detection/vmax")) {nh.getParam("object_detection/vmax", vmax1);}
+        if(nh.hasParam("object_detection/hmin1")) {nh.getParam("object_detection/hmin1", hmin1);}
+        if(nh.hasParam("object_detection/hmax1")) {nh.getParam("object_detection/hmax1", hmax1);}
+        if(nh.hasParam("object_detection/smin1")) {nh.getParam("object_detection/smin1", smin1);}
+        if(nh.hasParam("object_detection/smax1")) {nh.getParam("object_detection/smax1", smax1);}
+        if(nh.hasParam("object_detection/vmin1")) {nh.getParam("object_detection/vmin1", vmin1);}
+        if(nh.hasParam("object_detection/vmax1")) {nh.getParam("object_detection/vmax1", vmax1);}
+        if(nh.hasParam("object_detection/hmin2")) {nh.getParam("object_detection/hmin2", hmin2);}
+        if(nh.hasParam("object_detection/hmax2")) {nh.getParam("object_detection/hmax2", hmax2);}
+        if(nh.hasParam("object_detection/smin2")) {nh.getParam("object_detection/smin2", smin2);}
+        if(nh.hasParam("object_detection/smax2")) {nh.getParam("object_detection/smax2", smax2);}
+        if(nh.hasParam("object_detection/vmin2")) {nh.getParam("object_detection/vmin2", vmin2);}
+        if(nh.hasParam("object_detection/vmax2")) {nh.getParam("object_detection/vmax2", vmax2);}
 
 
         //Order of params: width, height, depth
@@ -89,7 +96,12 @@ public:
         upper1[0] = hmax1;
         upper1[1] = smax1;
         upper1[2] = vmax1;
-
+        lower2[0] = hmin2;
+        lower2[1] = smin2;
+        lower2[2] = vmin2;
+        upper2[0] = hmax2;
+        upper2[1] = smax2;
+        upper2[2] = vmax2;
 
     }
 
@@ -115,19 +127,38 @@ public:
             return;
         }
 
-        cv::Mat blured, resMat1, resMat2, combined;
+        cv::Mat blured, resMat1, resMat2, combined,result;
         cv::GaussianBlur(cv_ptr->image, blured, cv::Size(15,15), 0, 0);
         cv::imshow("Display window", blured);
         cv::cvtColor(blured, resMat1, CV_BGR2HSV);
         cv::cvtColor(blured, resMat2, CV_BGR2HSV);
+        cv::cvtColor(blured,result,CV_BGR2HSV);
         cv::inRange(resMat1, lower1, upper1, resMat1);
         cv::inRange(resMat2, lower2, upper2, resMat2);
         resMat2 = 255-resMat2;
         cv::imshow("Mask1 window", resMat1);
         cv::imshow("Mask2 window", resMat2);
         combined = resMat1 & resMat2;
+
         cv::medianBlur(combined, combined, 9);
+        combined = 255-combined;
         cv::imshow("Combined", combined);
+
+        cv::Mat locations;
+        cv::findNonZero(combined, locations);
+
+        if(locations.rows>=0){
+
+            //cv::Rect rec= cv::boundingRect(locations);
+            cv::Rect rec(245,165,150,150);
+            cv::Mat recImage = cv::Mat(result,rec);
+            cv_ptr->image=recImage;
+
+
+            img_pub.publish(cv_ptr->toImageMsg());
+        }
+
+
 
     }
 
@@ -240,6 +271,7 @@ private:
     ros::NodeHandle nh;
     image_transport::ImageTransport _it;
     image_transport::Subscriber img_sub;
+    image_transport::Publisher img_pub;
     ros::Subscriber pcl_sub;
     ros::Publisher vis_pub;
 

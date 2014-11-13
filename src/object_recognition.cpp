@@ -11,15 +11,47 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
+#include <cv_bridge/cv_bridge.h>
 
+#include <image_transport/image_transport.h>
 using std::cout;
 using std::endl;
 
 class object_recognition {
 public:
-    object_recognition() {
+    object_recognition() :
+        _it(nh){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
+        img_sub = _it.subscribe("/object_recognition/filtered_image",1, &object_recognition::recognitionCB,this);
+
+        cv::namedWindow("Image_got_from_detection");
+    }
+    void recognitionCB(const sensor_msgs::ImageConstPtr& img_msg){
+
+        //cout<< "got in CB"<< endl;
+
+        cv_bridge::CvImagePtr cv_ptr;
+        try {
+            cv_ptr = cv_bridge::toCvCopy(img_msg, "bgr8");
+        }
+        catch (cv_bridge::Exception& e) {
+            ROS_ERROR("cv_bridge exception: %s", e.what());
+            return;
+        }
+        //cout<< "loaded pointer"<< endl;
+
+        cv::Mat showimage;
+        cv::resize(cv_ptr->image,showimage,cv::Size(400,400),cv::INTER_AREA);
+        cv::imshow("Image_got_from_detection",showimage);
+
+        cv::waitKey(1);
+        cv::resize(cv_ptr->image,cv_ptr->image,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
+        cv::Mat rowImg = matToFloatRow(cv_ptr->image);
+        //cout<< rowImg.type()<< endl;
+        cv::Mat res;
+        kc.find_nearest(rowImg,5,&res);
+        cout << intToDesc[res.at<float>(0)] << endl;
     }
 
     void imgFileCB(const std_msgs::String& pathToImg) {
@@ -27,7 +59,7 @@ public:
         cv::Mat inputImg = cv::imread(pathToImg.data);
         cv::Mat rowImg = matToFloatRow(inputImg);
         cv::Mat res;
-        kc.find_nearest(rowImg, 5, &res);
+        kc.find_nearest(rowImg, 3, &res);
         cout << intToDesc[res.at<float>(0)] << endl;
     }
 
@@ -69,7 +101,6 @@ public:
             if(entry->d_type == DT_DIR && entry->d_name[0] != '.') objects.push_back(make_pair(entry->d_name, std::vector<std::string>()));
             entry = readdir(dirPtr);
         }
-
         closedir(dirPtr);
         for(int i = 0; i < objects.size(); i++) {
             dirPtr = opendir((directory + objects[i].first).c_str());
@@ -99,12 +130,14 @@ public:
 private:
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub;
-    static const int sample_size_x = 2;
-    static const int sample_size_y = 2;
+    static const int sample_size_x = 100;
+    static const int sample_size_y = 100;
     static const int attributes = 2;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
+    image_transport::ImageTransport _it;
+    image_transport::Subscriber img_sub;
 };
 
 
@@ -112,5 +145,8 @@ int main(int argc, char** argv){
     ros::init(argc, argv, "object_recognition");
     object_recognition object_rec;
     object_rec.train_knn();
-    ros::spin();
+    ros::Rate rate(1);
+    while(ros::ok()){
+        ros::spinOnce();
+    }
 }
