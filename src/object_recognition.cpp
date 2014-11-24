@@ -11,8 +11,10 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
-#include <cv_bridge/cv_bridge.h>
 
+#include <cv_bridge/cv_bridge.h>
+#include <sstream>
+#include <ras_msgs/RAS_Evidence.h>
 #include <image_transport/image_transport.h>
 using std::cout;
 using std::endl;
@@ -22,10 +24,12 @@ public:
     object_recognition() :
         _it(nh){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
-        imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
+        imagedir = "/home/marco/catkin_ws/src/object_recognition/sample_images/";
         img_sub = _it.subscribe("/object_recognition/filtered_image",1, &object_recognition::recognitionCB,this);
-
+        espeak_pub= nh.advertise<std_msgs::String>("/espeak/string",1);
         cv::namedWindow("Image_got_from_detection");
+        lastobject= ros::Time::now();
+        evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
     }
     void recognitionCB(const sensor_msgs::ImageConstPtr& img_msg){
 
@@ -43,6 +47,7 @@ public:
 
         cv::Mat showimage;
         cv::resize(cv_ptr->image,showimage,cv::Size(400,400),cv::INTER_AREA);
+        cv::cvtColor(showimage,showimage,CV_HSV2BGR);
         cv::imshow("Image_got_from_detection",showimage);
 
         cv::waitKey(1);
@@ -51,16 +56,52 @@ public:
         //cout<< rowImg.type()<< endl;
         cv::Mat res;
         kc.find_nearest(rowImg,5,&res);
-        cout << intToDesc[res.at<float>(0)] << endl;
+        std::string result =intToDesc[res.at<float>(0)];
+
+        ros::Time time = ros::Time::now();
+        if(!result.compare(("background")) && time.sec-lastobject.sec > 5){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = result;
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult(result);
+            lastobject = time;
+
+
+        }
+
     }
 
     void imgFileCB(const std_msgs::String& pathToImg) {
         cout << "Classifying " << pathToImg.data << endl;
         cv::Mat inputImg = cv::imread(pathToImg.data);
+        cv::Mat showimage;
+        cv::cvtColor(inputImg,showimage,CV_HSV2BGR);
+        cv::resize(showimage,showimage,cv::Size(400,400));
+
+        cv::imshow("Image_got_from_detection",showimage);
+
+        cv::waitKey(0);
+
         cv::Mat rowImg = matToFloatRow(inputImg);
         cv::Mat res;
         kc.find_nearest(rowImg, 3, &res);
-        cout << intToDesc[res.at<float>(0)] << endl;
+        std::string result =intToDesc[res.at<float>(0)];
+        ros::Time time = ros::Time::now();
+        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = result;
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult(result);
+            lastobject = time;
+
+        }
+
     }
 
     void train_knn(){
@@ -126,8 +167,17 @@ public:
         }
         return res;
     }
+    void speakresult(std::string detectedobject){
+        std::stringstream ss;
+
+        ss<<"I see a " << detectedobject;
+        std_msgs::String msg;
+        msg.data=ss.str();
+        espeak_pub.publish(msg);
+    }
 
 private:
+    ros::Publisher espeak_pub , evidence_pub;
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub;
     static const int sample_size_x = 100;
@@ -138,6 +188,7 @@ private:
     cv::KNearest kc;
     image_transport::ImageTransport _it;
     image_transport::Subscriber img_sub;
+    ros::Time lastobject;
 };
 
 
