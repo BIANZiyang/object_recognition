@@ -1,19 +1,24 @@
 object_detection:
-    width: 1
-    height: 1
-    depth: 1.5
-    heightOffset: -0.2
-    depthOffset: 0.5
-    leafsize: 0.005
-    hmin1: 0
-    hmax1: 180
-    smin1: 0
-    smax1: 180
-    vmin1: 56
-    vmax1: 255
-    hmin2: 43
-    hmax2: 180
-    smin2: 65
-    smax2: 255
-    vmin2: 0
-    vmax2: 255
+    crop:
+        widthMin: -1
+        widthMax: 1
+        heightMin: 0
+        heightMax: 1
+        depthMin: 0.1
+        depthMax: 3
+    voxel:
+        leafsize: 0.005
+    hsv1:
+        hmin: 0
+        hmax: 180
+        smin: 0
+        smax: 180
+        vmin: 56
+        vmax: 255
+    hsv2:
+        hmin: 43
+        hmax: 180
+        smin: 65
+        smax: 255
+        vmin: 0
+        vmax: 255
