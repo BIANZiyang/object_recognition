@@ -17,22 +17,30 @@
 
 class sample_image_creater{
 public:
-    sample_image_creater():
+    sample_image_creater(bool modus):
     _it(nh)
     {
-
+    cuttingbox=modus;
     std::cout<< "Reached the Constructor"<< std::endl;
-    img_sub = _it.subscribe("/camera/rgb/image_rect_color", 1, &sample_image_creater::imageCB, this);
-    xpos=0;
-    ypos=0;
-    boxsize=400;
+
+    cv::namedWindow("BoxTrackbar",CV_WINDOW_NORMAL);
+    if(cuttingbox){
+        img_sub = _it.subscribe("/camera/rgb/image_rect_color", 1, &sample_image_creater::imageCB, this);
+        xpos=0;
+        ypos=0;
+        boxsize=400;
+        cv::createTrackbar("Xpos","BoxTrackbar",&xpos,640);
+        cv::createTrackbar("Ypos","BoxTrackbar",&ypos,480);
+        cv::createTrackbar("Squaresize","BoxTrackbar",&boxsize,480);
+
+    }
+    else{
+        detection_sub = _it.subscribe("/object_recognition/filtered_image",1, &sample_image_creater::detectCB,this);
+    }
+
     waste=0;
     samplenumber=0;
     saving=1;
-    cv::namedWindow("BoxTrackbar",CV_WINDOW_NORMAL);
-    cv::createTrackbar("Xpos","BoxTrackbar",&xpos,640);
-    cv::createTrackbar("Ypos","BoxTrackbar",&ypos,480);
-    cv::createTrackbar("Squaresize","BoxTrackbar",&boxsize,480);
     cv::createTrackbar("Done","BoxTrackbar",&waste,1,Box_picked,this);
     cv::createTrackbar("Save?","BoxTrackbar",&saving,1);
     cv::imshow("BoxTrackbar",1);
@@ -41,6 +49,27 @@ public:
 
     std::cout<< "Done the Constructor"<< std::endl;
     }
+    void detectCB(const sensor_msgs::ImageConstPtr& img_msg){
+        cv_bridge::CvImagePtr cv_ptr;
+        try {
+            cv_ptr = cv_bridge::toCvCopy(img_msg, "bgr8");
+        }
+        catch (cv_bridge::Exception& e) {
+            ROS_ERROR("cv_bridge exception: %s", e.what());
+            return;
+        }
+        std::cout<< "Reached the convertion"<< std::endl;
+
+        cv::medianBlur(cv_ptr->image, image, 9);
+        cv::cvtColor(image,image, CV_BGR2HSV);
+
+        std::cout<< "Done the convertion"<< std::endl;
+        cv::imshow("Display window",image);
+
+        working=true;
+
+    }
+
     void imageCB(const sensor_msgs::ImageConstPtr& img_msg){
 
         std::cout<< "Reached the callback"<< std::endl;
@@ -122,12 +151,12 @@ public:
     int saving;
     static const int sample_size_x = 100;
     static const int sample_size_y = 100;
-
+    bool cuttingbox;
     cv::Mat cropped, image;
     int xpos,ypos,boxsize, waste,samplenumber;
     ros::NodeHandle nh;
     image_transport::ImageTransport _it;
-    image_transport::Subscriber img_sub;
+    image_transport::Subscriber img_sub,detection_sub;
 private:
 
 
@@ -139,16 +168,18 @@ int main(int argc, char** argv){
 
     std::cout<< "Reached the Main"<< std::endl;
     ros::init(argc, argv, "sample_image_creator");
-
-    sample_image_creater sic;
+    bool cuttingbox = true;
+    sample_image_creater sic(cuttingbox);
     ros::Rate rate(10);
     while(ros::ok()) {
         ros::spinOnce();
         std::cout<< "After Spin"<< std::endl;
         cv::waitKey(1);
         while(sic.working){
-            std::cout<< "Try to cut Box"<< std::endl;
-            sic.cut_box();
+            if(cuttingbox){
+                std::cout<< "Try to cut Box"<< std::endl;
+                sic.cut_box();
+            }
             cv::waitKey(1);
             rate.sleep();
 
