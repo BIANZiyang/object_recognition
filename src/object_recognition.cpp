@@ -31,6 +31,14 @@ public:
         lastobject= ros::Time::now();
         evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
     }
+    void imgFileCB(const std_msgs::String& pathToImg) {
+        cout << "Classifying " << pathToImg.data << endl;
+        cv::Mat inputImg = cv::imread(pathToImg.data);
+        classification(inputImg);
+
+
+    }
+
     void recognitionCB(const sensor_msgs::ImageConstPtr& img_msg){
 
         //cout<< "got in CB"<< endl;
@@ -44,39 +52,7 @@ public:
             return;
         }
         //cout<< "loaded pointer"<< endl;
-
-        cv::Mat showimage;
-        cv::resize(cv_ptr->image,showimage,cv::Size(400,400),cv::INTER_AREA);
-        cv::cvtColor(showimage,showimage,CV_HSV2BGR);
-        cv::imshow("Image_got_from_detection",showimage);
-
-        cv::waitKey(1);
-        cv::resize(cv_ptr->image,cv_ptr->image,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
-        cv::Mat rowImg = matToFloatRow(cv_ptr->image);
-        //cout<< rowImg.type()<< endl;
-
-        //PCA
-        cv::Mat pcaRowImg;
-
-        pca.project(rowImg,pcaRowImg);
-
-        cv::Mat res;
-        kc.find_nearest(pcaRowImg,5,&res);
-        std::string result =intToDesc[res.at<float>(0)];
-
-        ros::Time time = ros::Time::now();
-        if(!result.compare(("background")) && time.sec-lastobject.sec > 5){
-            ras_msgs::RAS_Evidence msg;
-            msg.stamp =ros::Time::now();
-            msg.object_id = result;
-            msg.group_number = 3;
-            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-            evidence_pub.publish(msg);
-            speakresult(result);
-            lastobject = time;
-
-
-        }
+        classification(cv_ptr->image);
 
     }
 
@@ -85,10 +61,7 @@ public:
         pca.project(rowImg,result);
 
     }
-
-    void imgFileCB(const std_msgs::String& pathToImg) {
-        cout << "Classifying " << pathToImg.data << endl;
-        cv::Mat inputImg = cv::imread(pathToImg.data);
+    void classification(cv::Mat inputImg){
         cv::Mat showimage;
         cv::cvtColor(inputImg,showimage,CV_HSV2BGR);
         cv::resize(showimage,showimage,cv::Size(400,400));
@@ -96,16 +69,31 @@ public:
         cv::imshow("Image_got_from_detection",showimage);
 
         cv::waitKey(1);
-
+        cv::resize(inputImg,inputImg,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
         cv::Mat rowImg = matToFloatRow(inputImg);
+
+        //PCA:
         cv::Mat pcaRowImg;
         pca.project(rowImg,pcaRowImg);
+
         cv::Mat res;
-        cout<< "Before PCA attributes " << rowImg.cols << "After PCA attributes " << pcaRowImg.cols << endl;
-        kc.find_nearest(pcaRowImg, 3, &res);
+        //cout<< "Before PCA attributes " << rowImg.cols << "After PCA attributes " << pcaRowImg.cols << endl;
+
+        cv::Mat neighborsclasses;
+        cv::Mat neighborsdistant;
+        kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
+        int sureness=0;
+        for(int i=0;i<neighborcount;i++){
+            if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
+                sureness++;
+            }
+        }
+        cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;
+
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
-        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5){
+
+        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor){
             ras_msgs::RAS_Evidence msg;
             msg.stamp =ros::Time::now();
             msg.object_id = result;
@@ -114,10 +102,10 @@ public:
             evidence_pub.publish(msg);
             speakresult(result);
             lastobject = time;
-
         }
 
     }
+
 
     void train_knn(){
         std::vector<std::pair<std::string, std::vector<std::string> > > objects = readTestImagePaths(imagedir);
@@ -197,6 +185,8 @@ private:
     ros::Publisher espeak_pub , evidence_pub;
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub;
+    static const float surenessfactor = 0.6;
+    static const int neighborcount= 7;
     static const int sample_size_x = 100;
     static const int sample_size_y = 100;
     static const int attributes = 2;
