@@ -54,8 +54,14 @@ public:
         cv::resize(cv_ptr->image,cv_ptr->image,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
         cv::Mat rowImg = matToFloatRow(cv_ptr->image);
         //cout<< rowImg.type()<< endl;
+
+        //PCA
+        cv::Mat pcaRowImg;
+
+        pca.project(rowImg,pcaRowImg);
+
         cv::Mat res;
-        kc.find_nearest(rowImg,5,&res);
+        kc.find_nearest(pcaRowImg,5,&res);
         std::string result =intToDesc[res.at<float>(0)];
 
         ros::Time time = ros::Time::now();
@@ -74,6 +80,12 @@ public:
 
     }
 
+    void trainPCA(cv::Mat& rowImg, cv::Mat& result){
+        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,0.95);
+        pca.project(rowImg,result);
+
+    }
+
     void imgFileCB(const std_msgs::String& pathToImg) {
         cout << "Classifying " << pathToImg.data << endl;
         cv::Mat inputImg = cv::imread(pathToImg.data);
@@ -83,11 +95,14 @@ public:
 
         cv::imshow("Image_got_from_detection",showimage);
 
-        cv::waitKey(0);
+        cv::waitKey(1);
 
         cv::Mat rowImg = matToFloatRow(inputImg);
+        cv::Mat pcaRowImg;
+        pca.project(rowImg,pcaRowImg);
         cv::Mat res;
-        kc.find_nearest(rowImg, 3, &res);
+        cout<< "Before PCA attributes " << rowImg.cols << "After PCA attributes " << pcaRowImg.cols << endl;
+        kc.find_nearest(pcaRowImg, 3, &res);
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
         if(0!=result.compare(("background")) && time.sec-lastobject.sec >5){
@@ -119,9 +134,10 @@ public:
                 trainData.push_back(rowImg);
             }
         }
-
+        cv::Mat pcatrainData;
+        trainPCA(trainData,pcatrainData);
         std::cout << "Try to train"<< std::endl;
-        kc.train(trainData, responses);
+        kc.train(pcatrainData, responses);
         std::cout<< "Training succeded"<< std::endl;
     }
 
@@ -177,6 +193,7 @@ public:
     }
 
 private:
+    cv::PCA pca;
     ros::Publisher espeak_pub , evidence_pub;
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub;
