@@ -68,9 +68,10 @@ public:
         cv::Mat showimage;
         cv::resize(inputImg,showimage,cv::Size(400,400));
 
-        cv::imshow("Image_got_from_detection",showimage);
         cv::cvtColor(inputImg,inputImg,CV_BGR2HSV);
 
+        cv::imshow("Image_got_from_detection",inputImg);
+        cv::waitKey(1);
         cv::resize(inputImg,inputImg,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
         cv::Mat rowImg = matToFloatRow(inputImg);
 
@@ -92,7 +93,7 @@ public:
             }
         }
         cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;
-        //cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes];
+        cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<< endl;
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
 
