@@ -91,7 +91,7 @@ public:
             }
         }
         cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;
-
+        cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes];
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
 
