@@ -24,7 +24,7 @@ public:
     object_recognition() :
         _it(nh){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
-        imagedir = "/home/marco/catkin_ws/src/object_recognition/sample_images/";
+        imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         img_sub = _it.subscribe("/object_recognition/filtered_image",1, &object_recognition::recognitionCB,this);
         espeak_pub= nh.advertise<std_msgs::String>("/espeak/string",1);
         cv::namedWindow("Image_got_from_detection");

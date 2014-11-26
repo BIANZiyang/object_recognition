@@ -70,6 +70,9 @@ public:
             return;
         }
         currentImagePtr_ = cvPtr;
+        rows_ = cvPtr->image.rows;
+        cols_ = cvPtr->image.cols;
+        haveImage_ = true;
     }
 
     void pointCloudCB(const sensor_msgs::PointCloud2ConstPtr& pclMsg) {
@@ -86,18 +89,24 @@ public:
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
         pcl_tf_pub_.publish(msgOut);
+        havePcl_ = true;
 
     }
 
     void detect() {
-        //filterVoxelGrid(currentCloudPtr_,currentCloudPtr_);
-        pcl::CropBox<Point> cb;
+        if(!haveImage_ || !havePcl_) {
+            DEBUG(std::cout << "No PCL or image set" << std::endl;)
+            return;
+        }
+
+//        pcl::CropBox<Point> cb;
 
         std::vector<int> indices;
-        cb.setMin(cbMin_);
-        cb.setMax(cbMax_);
-        cb.setInputCloud(currentCloudPtr_);
-        cb.filter(indices);
+//        cb.setMin(cbMin_);
+//        cb.setMax(cbMax_);
+//        cb.setInputCloud(currentCloudPtr_);
+        cropDepthData(indices);
+//        cb.filter(indices);
 
         std::cout << "indices size: " << indices.size() << std::endl;
 
@@ -122,19 +131,19 @@ public:
             cv::imshow("Depth filter", depthMask);
             cv::Mat filtered;
 
-            cv::Mat locations;
-            hsvfilter(RGBMat, filtered,locations);
+//            cv::Mat locations;
+//            hsvfilter(RGBMat, filtered,locations);
 
-            cv::imshow("HSV filter", filtered);
-            cv::Mat result;
-            cv::bitwise_and(filtered,filtered,result,depthMask);
-            if(locations.rows>=0){
-//                cv_bridge::CvImagePtr cvPtr;
-                cv::Rect rec= cv::boundingRect(locations);
-                cv::Mat recImage = cv::Mat(result,rec);
-//                cvPtr->image=recImage;
-//                img_pub_.publish(cvPtr->toImageMsg());
-            }
+            cv::imshow("HSV filter", RGBMat);
+//            cv::Mat result;
+//            cv::bitwise_and(filtered,filtered,result,depthMask);
+//            if(locations.rows>=0){
+////                cv_bridge::CvImagePtr cvPtr;
+//                cv::Rect rec= cv::boundingRect(locations);
+//                cv::Mat recImage = cv::Mat(result,rec);
+////                cvPtr->image=recImage;
+////                img_pub_.publish(cvPtr->toImageMsg());
+//            }
 
 
         }
@@ -200,6 +209,21 @@ private:
         double& smax;
         double& vmax;
     };
+
+    void cropDepthData(std::vector<int>& outIndices) {
+        for(int index = 0; index < rows_*cols_; ++index) {
+            Point& cp = currentCloudPtr_->at(index);
+            if(cp.y >= cbMin_[0] &&
+                    cp.y <= cbMax_[0] &&
+                    cp.x >= cbMin_[1] &&
+                    cp.x <= cbMax_[1] &&
+                    cp.z >= cbMin_[2] &&
+                    cp.z <= cbMax_[2]) {
+                outIndices.push_back(index);
+
+            }
+        }
+    }
 
 
 
@@ -357,10 +381,13 @@ private:
     tf::TransformListener tf_sub_;
     image_transport::Publisher img_pub_;
     ros::Publisher pcl_tf_pub_;
+    bool haveImage_;
+    bool havePcl_;
 
     boost::thread uiThread;
 
     double voxelsize_;
+    int rows_, cols_;
     int selectedHsvRange_;
     int lastHsvRange_;
     int hmin_, smin_, vmin_, hmax_, smax_, vmax_;
