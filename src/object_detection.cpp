@@ -30,8 +30,8 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define DEBUG
-#define DEBUG(X) {X}
+#define DEBUG(X)
+//#define DEBUG(X) {X}
 
 class object_detection{
 public:
@@ -55,7 +55,7 @@ public:
 
         selectedHsvRange_ = 0;
         lastHsvRange_ = -1;
-        setupHsvTrackbars();
+        DEBUG(setupHsvTrackbars();)
         uiThread = boost::thread(&object_detection::asyncImshow, this);
     }
 
@@ -75,8 +75,7 @@ public:
             return;
         }
         currentImagePtr_ = cvPtr;
-        DEBUG(std::cout << "current image ptr: " << currentImagePtr_ << std::endl;)
-        cv::imshow("Input image", currentImagePtr_->image);
+        DEBUG(cv::imshow("Input image", currentImagePtr_->image);)
         rows_ = cvPtr->image.rows;
         cols_ = cvPtr->image.cols;
         haveImage_ = true;
@@ -90,6 +89,7 @@ public:
             tf_sub_.lookupTransform("/camera_rgb_optical_frame", "robot_center", ros::Time(0), transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s",ex.what());
+            return;
         }
         pcl_ros::transformPointCloud(*currentCloudPtr_, *currentCloudPtr_, transform);
         currentCloudPtr_->header.frame_id = "robot_center";
@@ -113,7 +113,7 @@ public:
         for(size_t i = 0; i < indices.size(); ++i) {
             depthMask.at<char>(indices[i]) = 255;
         }
-        cv::imshow("Depth filter", depthMask);
+        DEBUG(cv::imshow("Depth filter", depthMask);)
 
         cv::Mat HSVmask;
         cv::Mat combinedMask;
@@ -122,48 +122,57 @@ public:
             cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
             cv::inRange(HSVmask, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
-            if(i == selectedHsvRange_) {
-                cv::imshow("HSV filter", HSVmask);
-                combinedMask = depthMask & HSVmask;
-            }
-        }
+            combinedMask = depthMask & HSVmask;
 
-        cv::medianBlur(combinedMask, combinedMask, 3);
-        std::vector<std::vector<cv::Point> > contours;
-        std::vector<cv::Vec4i> notUsedHierarchy;
-        cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
-
-        if(contours.size() > 0) {
-            double largestArea = 0;
-            int largestContourIndex = 0;
-            for(size_t i = 0; i < contours.size(); ++i) {
-                double area = cv::contourArea(contours[i]);
-                if(area > largestArea) {
-                    largestArea = area;
-                    largestContourIndex = i;
+            DEBUG(
+                if(i == selectedHsvRange_) {
+                    cv::imshow("HSV filter", HSVmask);
                 }
+            )
+
+            cv::medianBlur(combinedMask, combinedMask, 3);
+            std::vector<std::vector<cv::Point> > contours;
+            std::vector<cv::Vec4i> notUsedHierarchy;
+            cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
+
+            if(contours.size() > 0) {
+                double largestArea = 0;
+                int largestContourIndex = -1;
+                for(size_t i = 0; i < contours.size(); ++i) {
+                    double area = cv::contourArea(contours[i]);
+                    DEBUG(std::cout << "Area: " << area << std::endl;)
+                    if(area > areaThreshold_ && area > largestArea) {
+                        largestArea = area;
+                        largestContourIndex = i;
+                    }
+                }
+
+                if(largestContourIndex == -1) {
+                    return;
+                }
+
+                cv::Rect objRect = cv::boundingRect(contours[largestContourIndex]);
+                if(objRect.x - rectPadding_ >= 0 &&
+                     objRect.y - rectPadding_ >= 0 &&
+                     objRect.height + 2*rectPadding_ <= rows_ &&
+                     objRect.width + 2*rectPadding_ <= cols_)
+                {
+                    objRect.x -= rectPadding_;
+                    objRect.y -= rectPadding_;
+                    objRect.height += 2*rectPadding_;
+                    objRect.width += 2*rectPadding_;
+                }
+
+                cv::Mat objImgOut = currentImagePtr_->image(objRect);
+                DEBUG(cv::imshow("Combined filter", objImgOut);)
+
+                cv_bridge::CvImage img;
+                img.image = objImgOut;
+                sensor_msgs::ImagePtr imgOut = img.toImageMsg();
+                imgOut->encoding = "bgr8";
+                img_pub_.publish(imgOut);
+
             }
-            cv::Rect objRect = cv::boundingRect(contours[largestContourIndex]);
-            if(objRect.x - rectPadding_ >= 0 &&
-                 objRect.y - rectPadding_ >= 0 &&
-                 objRect.height + 2*rectPadding_ <= rows_ &&
-                 objRect.width + 2*rectPadding_ <= cols_)
-            {
-                objRect.x -= rectPadding_;
-                objRect.y -= rectPadding_;
-                objRect.height += 2*rectPadding_;
-                objRect.width += 2*rectPadding_;
-            }
-
-            cv::Mat objImgOut = currentImagePtr_->image(objRect);
-            cv::imshow("Combined filter", objImgOut);
-
-            cv_bridge::CvImage img;
-            img.image = objImgOut;
-            sensor_msgs::ImagePtr imgOut = img.toImageMsg();
-            imgOut->encoding = "bgr8";
-            img_pub_.publish(imgOut);
-
         }
     }
 
@@ -239,6 +248,7 @@ private:
 
         getParam("object_detection/voxel/leafsize", voxelsize_, 0.005);
         getParam("object_detection/rectPadding", rectPadding_, 5);
+        getParam("object_detection/minArea", areaThreshold_, 10);
 
         std::string hsvParamName("object_detection/hsv");
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
@@ -260,7 +270,7 @@ private:
         }
         variable = standardValue;
         DEBUG(std::cout << "Parameter '" << paramName << "' not found" << std::endl;)
-                return false;
+        return false;
     }
 
     template <typename T> bool getParam(const std::string paramName, float& variable, const T& standardValue) {
@@ -276,7 +286,7 @@ private:
     }
 
     void asyncImshow() {
-        ros::Rate rate(5);
+        ros::Rate rate(1);
         while(1) {
             try {
                 boost::this_thread::interruption_point();
@@ -333,6 +343,7 @@ private:
     boost::thread uiThread;
 
     double voxelsize_;
+    double areaThreshold_;
     int rectPadding_;
     int rows_, cols_;
     int selectedHsvRange_;
