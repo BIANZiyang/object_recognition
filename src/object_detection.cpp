@@ -30,8 +30,8 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-#define DEBUG(X)
-//#define DEBUG(X) {X}
+//#define DEBUG(X)
+#define DEBUG(X) {X}
 
 class object_detection{
 public:
@@ -118,6 +118,8 @@ public:
         cv::Mat HSVmask;
         cv::Mat combinedMask;
         cv::medianBlur(currentImagePtr_->image, HSVmask, 9);
+        double largestArea = 0;
+        std::vector<cv::Point> largestContour;
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
             cv::inRange(HSVmask, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
@@ -136,43 +138,41 @@ public:
             cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
 
             if(contours.size() > 0) {
-                double largestArea = 0;
-                int largestContourIndex = -1;
                 for(size_t i = 0; i < contours.size(); ++i) {
                     double area = cv::contourArea(contours[i]);
                     DEBUG(std::cout << "Area: " << area << std::endl;)
                     if(area > areaThreshold_ && area > largestArea) {
                         largestArea = area;
-                        largestContourIndex = i;
+                        largestContour = contours[i];
                     }
                 }
 
-                if(largestContourIndex == -1) {
-                    return;
-                }
-
-                cv::Rect objRect = cv::boundingRect(contours[largestContourIndex]);
-                if(objRect.x - rectPadding_ >= 0 &&
-                     objRect.y - rectPadding_ >= 0 &&
-                     objRect.height + 2*rectPadding_ <= rows_ &&
-                     objRect.width + 2*rectPadding_ <= cols_)
-                {
-                    objRect.x -= rectPadding_;
-                    objRect.y -= rectPadding_;
-                    objRect.height += 2*rectPadding_;
-                    objRect.width += 2*rectPadding_;
-                }
-
-                cv::Mat objImgOut = currentImagePtr_->image(objRect);
-                DEBUG(cv::imshow("Combined filter", objImgOut);)
-
-                cv_bridge::CvImage img;
-                img.image = objImgOut;
-                sensor_msgs::ImagePtr imgOut = img.toImageMsg();
-                imgOut->encoding = "bgr8";
-                img_pub_.publish(imgOut);
-
             }
+
+            if(largestContour.size() == 0) {
+                return;
+            }
+
+            cv::Rect objRect = cv::boundingRect(largestContour);
+            if(objRect.x - rectPadding_ >= 0 &&
+                 objRect.y - rectPadding_ >= 0 &&
+                 objRect.height + 2*rectPadding_ <= rows_ &&
+                 objRect.width + 2*rectPadding_ <= cols_)
+            {
+                objRect.x -= rectPadding_;
+                objRect.y -= rectPadding_;
+                objRect.height += 2*rectPadding_;
+                objRect.width += 2*rectPadding_;
+            }
+
+            cv::Mat objImgOut = currentImagePtr_->image(objRect);
+            DEBUG(cv::imshow("Combined filter", objImgOut);)
+
+            cv_bridge::CvImage img;
+            img.image = objImgOut;
+            sensor_msgs::ImagePtr imgOut = img.toImageMsg();
+            imgOut->encoding = "bgr8";
+            img_pub_.publish(imgOut);
         }
     }
 
