@@ -127,7 +127,6 @@ public:
 
             cv::imshow("HSV filter", filtered);
             cv::Mat result;
-
             cv::bitwise_and(filtered,filtered,result,depthMask);
             if(locations.rows>=0){
 //                cv_bridge::CvImagePtr cvPtr;
