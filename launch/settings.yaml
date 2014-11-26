@@ -8,17 +8,35 @@ object_detection:
         dMax: 3
     voxel:
         leafsize: 0.005
-    hsv1:
-        hmin: 0
+    hsv0:
+        color: purple
+        hmin: 130
         hmax: 180
-        smin: 0
-        smax: 180
-        vmin: 56
+        smin: 101
+        smax: 255
+        vmin: 110
+        vmax: 255
+    hsv1:
+        color: blue
+        hmin: 82
+        hmax: 119
+        smin: 58
+        smax: 219
+        vmin: 59
         vmax: 255
     hsv2:
-        hmin: 43
-        hmax: 180
-        smin: 65
+        color: yellow
+        hmin: 0
+        hmax: 114
+        smin: 179
         smax: 255
-        vmin: 0
+        vmin: 171
         vmax: 255
+    hsv3:
+        color: green
+        hmin: 33
+        hmax: 90
+        smin: 42
+        smax: 255
+        vmin: 19
+        vmax: 227
