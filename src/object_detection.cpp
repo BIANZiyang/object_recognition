@@ -38,11 +38,11 @@ public:
     object_detection() :
         it_(nh_)
     {
-        hsvRanges_.resize(5);
+        hsvRanges_.resize(6);
         loadParams();
 
-        pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
-        img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
+        pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
+        img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
         img_pub_ = it_.advertise("/object_detection/object",1);
         pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
 
@@ -103,7 +103,7 @@ public:
     void detect() {
         if(!haveImage_ || !havePcl_) {
             DEBUG(std::cout << "No PCL or image set" << std::endl;)
-                    return;
+            return;
         }
 
         std::vector<int> indices;
@@ -132,9 +132,6 @@ public:
         std::vector<std::vector<cv::Point> > contours;
         std::vector<cv::Vec4i> notUsedHierarchy;
         cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
-//                cv::Mat contoursImg = currentImagePtr_->image.clone();
-//                cv::drawContours(contoursImg, contours, -1, cv::Scalar(255, 0, 0), 3);
-//                std::cout << contours.size() << std::endl;
 
         if(contours.size() > 0) {
             double largestArea = 0;
@@ -322,65 +319,6 @@ private:
         hsvRanges_[selectedHsvRange_].vmin = cv::getTrackbarPos("Vmin", "HSVTrackbars");
         hsvRanges_[selectedHsvRange_].vmax = cv::getTrackbarPos("Vmax", "HSVTrackbars");
     }
-
-    //    void filter_crop_box(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-    //        pcl::CropBox<Point> cb;
-    //        cb.setMin(cbMin_);
-    //        cb.setMax(cbMax_);
-    //        cb.setInputCloud(pcl_msg);
-    //        cb.filter(*filtered);
-    //    }
-
-    //    void statistical_Outlair_Removal(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-    //        pcl::StatisticalOutlierRemoval<Point> sor;
-    //        sor.setInputCloud (pcl_msg);
-    //        sor.setMeanK (10);
-    //        sor.setStddevMulThresh (1.0);
-    //        sor.filter (*filtered);
-    //    }
-
-    //    void filterVoxelGrid(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-    //        pcl::VoxelGrid<Point> sor;
-    //        sor.setInputCloud(pcl_msg);
-    //        sor.setLeafSize (voxelsize_, voxelsize_, voxelsize_);
-    //        sor.filter (*filtered);
-    //    }
-
-    //    void filterHSV(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-    //        cv::Mat RGBMat(pcl_msg->height, pcl_msg->width, CV_8UC3);
-    //        cv::Mat HSVMat;
-    //        cv::Mat resMat(pcl_msg->height, pcl_msg->width, CV_8U);
-
-    //        if (pcl_msg->isOrganized()) {
-    //            if (!pcl_msg->empty()) {
-    //                for (int h=0; h<RGBMat.rows; h++) {
-    //                    for (int w=0; w<RGBMat.cols; w++) {
-    //                        Point point = pcl_msg->at(w, h);
-    //                        Eigen::Vector3i rgb = point.getRGBVector3i();
-
-    //                        RGBMat.at<cv::Vec3b>(h,w)[0] = rgb[2];
-    //                        RGBMat.at<cv::Vec3b>(h,w)[1] = rgb[1];
-    //                        RGBMat.at<cv::Vec3b>(h,w)[2] = rgb[0];
-    //                    }
-    //                }
-    //            }
-    //        }
-    //        }
-    //        //cv::medianBlur(RGBMat, RGBMat, 7);
-    //        cv::GaussianBlur(RGBMat, RGBMat, cv::Size(15,15), 0, 0);
-    //        cv::cvtColor(RGBMat, HSVMat, CV_BGR2HSV);
-    //        cv::inRange(HSVMat, lower1, upper1, resMat);
-    //        cv::medianBlur(resMat, resMat, 9);
-
-    //        std::vector<int> indices;
-    //        for(int i = 0; i < pcl_msg->size(); i++) {
-    //            if(!resMat.at<unsigned char>(0, i)) indices.push_back(i);
-    //        }
-
-    //        *filtered = Cloud(*pcl_msg, indices);
-
-    //        cv::imshow("Display window", RGBMat);
-    //    }
 
     ros::NodeHandle nh_;
     ros::Subscriber pcl_sub_;
