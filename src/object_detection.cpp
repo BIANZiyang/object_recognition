@@ -30,6 +30,8 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
+#define DEBUG(X) {X}
+
 class object_detection{
 public:
     object_detection() :
@@ -75,11 +77,12 @@ public:
         pcl::fromROSMsg(*pclMsg, *currentCloudPtr_);
         tf::StampedTransform transform;
         try {
-            tf_sub_.lookupTransform("camera_rgb_optical", "robot_base", ros::Time(0), transform);
+            tf_sub_.lookupTransform("/camera_rgb_optical_frame", "robot_center", ros::Time(0), transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s",ex.what());
         }
         pcl_ros::transformPointCloud(*currentCloudPtr_, *currentCloudPtr_, transform);
+        currentCloudPtr_->header.frame_id = "robot_center";
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
         pcl_tf_pub_.publish(msgOut);
@@ -94,6 +97,8 @@ public:
         cb.setMax(cbMax_);
         cb.setInputCloud(currentCloudPtr_);
         cb.filter(indices);
+
+        std::cout << "indices size: " << indices.size() << std::endl;
 
         int rows = currentCloudPtr_->height;
         int cols = currentCloudPtr_->width;
@@ -198,12 +203,12 @@ private:
 
 
     void loadParams(){
-        getParam("object_detection/crop/wMin", cbMin_[0], -0.3);    //width
-        getParam("object_detection/crop/hMin", cbMin_[1], 0.01);    //height
-        getParam("object_detection/crop/dMin", cbMin_[2], 0.1);     //depth
-        getParam("object_detection/crop/wMax", cbMax_[0], 0.3);     //width
-        getParam("object_detection/crop/hMax", cbMax_[1], 0.07);    //height
-        getParam("object_detection/crop/dMax", cbMax_[2], 3);       //depth
+        getParam("object_detection/crop/wMin", cbMin_[0], -10);
+        getParam("object_detection/crop/dMin", cbMin_[1], -10);
+        getParam("object_detection/crop/hMin", cbMin_[2], -10);
+        getParam("object_detection/crop/wMax", cbMax_[0], 10);
+        getParam("object_detection/crop/dMax", cbMax_[1], 10);
+        getParam("object_detection/crop/hMax", cbMax_[2], 10);
 
         getParam("object_detection/voxel/leafsize", voxelsize_, 0.005);
 
@@ -225,6 +230,7 @@ private:
             return true;
         }
         variable = standardValue;
+        DEBUG(std::cout << paramName << "not found" << std::endl;)
         return false;
     }
 
@@ -236,6 +242,7 @@ private:
             return true;
         }
         variable = standardValue;
+        DEBUG(std::cout << paramName << "not found" << std::endl;)
         return false;
     }
 

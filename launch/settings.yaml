@@ -1,11 +1,11 @@
 object_detection:
     crop:
-        widthMin: -1
-        widthMax: 1
-        heightMin: 0
-        heightMax: 1
-        depthMin: 0.1
-        depthMax: 3
+        wMin: -1
+        wMax: 1
+        hMin: 0.01
+        hMax: 0.1
+        dMin: 0.1
+        dMax: 3
     voxel:
         leafsize: 0.005
     hsv1:
