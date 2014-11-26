@@ -24,16 +24,17 @@ public:
     object_recognition() :
         _it(nh){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
-        imagedir = "/home/marco/catkin_ws/src/object_recognition/sample_images/";
+        imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         img_sub = _it.subscribe("/object_recognition/filtered_image",1, &object_recognition::recognitionCB,this);
         espeak_pub= nh.advertise<std_msgs::String>("/espeak/string",1);
         cv::namedWindow("Image_got_from_detection");
         lastobject= ros::Time::now();
-        evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
+         evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
     }
     void imgFileCB(const std_msgs::String& pathToImg) {
         cout << "Classifying " << pathToImg.data << endl;
         cv::Mat inputImg = cv::imread(pathToImg.data);
+        cout << "Loading Image done" << endl;
         classification(inputImg);
 
 
@@ -57,15 +58,15 @@ public:
     }
 
     void trainPCA(cv::Mat& rowImg, cv::Mat& result){
-        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,0.95);
+        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,0.99);
         pca.project(rowImg,result);
 
     }
     void classification(cv::Mat inputImg){
         cv::Mat showimage;
-        cv::cvtColor(inputImg,showimage,CV_HSV2BGR);
-        cv::resize(showimage,showimage,cv::Size(400,400));
+        cv::resize(inputImg,showimage,cv::Size(400,400));
 
+        cv::cvtColor(showimage,showimage,CV_HSV2BGR);
         cv::imshow("Image_got_from_detection",showimage);
 
         cv::waitKey(1);
@@ -82,6 +83,7 @@ public:
         cv::Mat neighborsclasses;
         cv::Mat neighborsdistant;
         kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
+        float resbayes = bc.predict(pcaRowImg);
         int sureness=0;
         for(int i=0;i<neighborcount;i++){
             if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
@@ -93,7 +95,7 @@ public:
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
 
-        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor){
+        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor && res.at<float>(0) == resbayes){
             ras_msgs::RAS_Evidence msg;
             msg.stamp =ros::Time::now();
             msg.object_id = result;
@@ -103,9 +105,21 @@ public:
             speakresult(result);
             lastobject = time;
         }
+        else if(time.sec-lastobject.sec >5 ){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = "Object";
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult("Object");
+            lastobject = time;
+        }
 
     }
-
+    void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
+        bc.train(traindata,responses);
+    }
 
     void train_knn(){
         std::vector<std::pair<std::string, std::vector<std::string> > > objects = readTestImagePaths(imagedir);
@@ -126,6 +140,10 @@ public:
         trainPCA(trainData,pcatrainData);
         std::cout << "Try to train"<< std::endl;
         kc.train(pcatrainData, responses);
+
+        //BayesClassifier:
+        train_BayesClassifier(pcatrainData,responses);
+
         std::cout<< "Training succeded"<< std::endl;
     }
 
@@ -185,14 +203,15 @@ private:
     ros::Publisher espeak_pub , evidence_pub;
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub;
-    static const float surenessfactor = 0.6;
-    static const int neighborcount= 7;
+    static const float surenessfactor = 0.5;
+    static const int neighborcount= 3;
     static const int sample_size_x = 100;
     static const int sample_size_y = 100;
     static const int attributes = 2;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
+    cv::NormalBayesClassifier bc;
     image_transport::ImageTransport _it;
     image_transport::Subscriber img_sub;
     ros::Time lastobject;

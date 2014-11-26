@@ -40,7 +40,7 @@ public:
         loadParams();
 
         pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
-        img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+        img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
         img_pub_ = it_.advertise("/object_recognition/filtered_image",1);
         pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
 
@@ -49,6 +49,7 @@ public:
 
         cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
         cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
+        cv::namedWindow("Input image", CV_WINDOW_AUTOSIZE);
         selectedHsvRange_ = 0;
         lastHsvRange_ = selectedHsvRange_;
         setupHsvTrackbars();
@@ -61,6 +62,7 @@ public:
     }
 
     void imageCB(const sensor_msgs::ImageConstPtr& img_msg) {
+        DEBUG(std::cout << "Got image callback" << std::endl;)
         cv_bridge::CvImagePtr cvPtr;
         try {
             cvPtr = cv_bridge::toCvCopy(img_msg, "bgr8");
@@ -70,10 +72,16 @@ public:
             return;
         }
         currentImagePtr_ = cvPtr;
+        DEBUG(std::cout << "current image ptr: " << currentImagePtr_ << std::endl;)
+        DEBUG(std::cout << "current image data ptr: " << &currentImagePtr_->image << std::endl;)
+        cv::imshow("Input image", currentImagePtr_->image);
+        rows_ = cvPtr->image.rows;
+        cols_ = cvPtr->image.cols;
+        haveImage_ = true;
     }
 
     void pointCloudCB(const sensor_msgs::PointCloud2ConstPtr& pclMsg) {
-
+        DEBUG(std::cout << "Got pcl callback" << std::endl;)
         pcl::fromROSMsg(*pclMsg, *currentCloudPtr_);
         tf::StampedTransform transform;
         try {
@@ -86,76 +94,56 @@ public:
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
         pcl_tf_pub_.publish(msgOut);
+        havePcl_ = true;
 
     }
 
     void detect() {
-        //filterVoxelGrid(currentCloudPtr_,currentCloudPtr_);
-        pcl::CropBox<Point> cb;
+        if(!haveImage_ || !havePcl_) {
+            DEBUG(std::cout << "No PCL or image set" << std::endl;)
+            return;
+        }
 
         std::vector<int> indices;
-        cb.setMin(cbMin_);
-        cb.setMax(cbMax_);
-        cb.setInputCloud(currentCloudPtr_);
-        cb.filter(indices);
+        cropDepthData(indices);
+        DEBUG(std::cout << "indices size: " << indices.size() << std::endl;)
 
-        std::cout << "indices size: " << indices.size() << std::endl;
+        cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
+        for(size_t i = 0; i < indices.size(); ++i) {
+            depthMask.at<char>(indices[i]) = 255;
+        }
+        cv::imshow("Depth filter", depthMask);
 
-        int rows = currentCloudPtr_->height;
-        int cols = currentCloudPtr_->width;
+        cv::Mat HSVmask;
+        for(size_t i = 0; i < hsvRanges_.size(); ++i) {
+            cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
+            cv::inRange(HSVmask, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
-        if(rows > 0 && cols > 0) {
-            cv::Mat depthMask = cv::Mat::zeros(rows, cols, CV_8UC1);
-            for(size_t i = 0; i < indices.size(); ++i) {
-                depthMask.at<char>(indices[i]) = 255;
+            if(i == selectedHsvRange_) {
+                cv::imshow("HSV filter", HSVmask);
             }
-
-            //Temporary
-            cv::Mat RGBMat(rows, cols, CV_8UC3);
-            for(size_t i = 0; i < rows*cols; ++i) {
-                Eigen::Vector3i rgb = currentCloudPtr_->at(i).getRGBVector3i();
-
-                RGBMat.at<cv::Vec3b>(i)[0] = rgb[2];
-                RGBMat.at<cv::Vec3b>(i)[1] = rgb[1];
-                RGBMat.at<cv::Vec3b>(i)[2] = rgb[0];
-            }
-            cv::imshow("Depth filter", depthMask);
-            cv::Mat filtered;
-
-            cv::Mat locations;
-            hsvfilter(RGBMat, filtered,locations);
-
-            cv::imshow("HSV filter", filtered);
-            cv::Mat result;
-            cv::bitwise_and(filtered,filtered,result,depthMask);
-            if(locations.rows>=0){
-//                cv_bridge::CvImagePtr cvPtr;
-                cv::Rect rec= cv::boundingRect(locations);
-                cv::Mat recImage = cv::Mat(result,rec);
-//                cvPtr->image=recImage;
-//                img_pub_.publish(cvPtr->toImageMsg());
-            }
-
-
         }
     }
-    void hsvfilter(cv::Mat& input, cv::Mat& filtered,cv::Mat& locations){
-        cv::Mat workingimg;
-        cv::cvtColor(input, workingimg, CV_BGR2HSV);
-        cv::Scalar lower, upper;
-        lower[0] = hsvRanges_[0].hmin;
-        lower[1] = hsvRanges_[0].smin;
-        lower[2] = hsvRanges_[0].vmin;
-        upper[0] = hsvRanges_[0].hmax;
-        upper[1] = hsvRanges_[0].smax;
-        upper[2] = hsvRanges_[0].vmax;
-//        std::cout << lower << upper << std::endl;
-        cv::Mat mask;
-        cv::inRange(workingimg,lower,upper,mask);
-        cv::bitwise_and(workingimg,workingimg,filtered,mask=mask);
 
-        cv::findNonZero(mask, locations);
-    }
+
+
+//    void hsvfilter(cv::Mat& input, cv::Mat& filtered,cv::Mat& locations){
+//        cv::Mat workingimg;
+//        cv::cvtColor(input, workingimg, CV_BGR2HSV);
+//        cv::Scalar lower, upper;
+//        lower[0] = hsvRanges_[0].hmin;
+//        lower[1] = hsvRanges_[0].smin;
+//        lower[2] = hsvRanges_[0].vmin;
+//        upper[0] = hsvRanges_[0].hmax;
+//        upper[1] = hsvRanges_[0].smax;
+//        upper[2] = hsvRanges_[0].vmax;
+////        std::cout << lower << upper << std::endl;
+//        cv::Mat mask;
+//        cv::inRange(workingimg,lower,upper,mask);
+//        cv::bitwise_and(workingimg,workingimg,filtered,mask=mask);
+
+//        cv::findNonZero(mask, locations);
+//    }
 
 private:
     class hsvRange {
@@ -200,6 +188,21 @@ private:
         double& smax;
         double& vmax;
     };
+
+    void cropDepthData(std::vector<int>& outIndices) {
+        for(int index = 0; index < rows_*cols_; ++index) {
+            Point& cp = currentCloudPtr_->at(index);
+            if(std::isnan(cp.y) ||
+                    cp.y >= cbMin_[1] &&
+                    cp.y <= cbMax_[1] &&
+                    cp.x >= cbMin_[0] &&
+                    cp.x <= cbMax_[0] &&
+                    cp.z >= cbMin_[2] &&
+                    cp.z <= cbMax_[2]) {
+                outIndices.push_back(index);
+            }
+        }
+    }
 
 
 
@@ -248,7 +251,7 @@ private:
     }
 
     void asyncImshow() {
-        ros::Rate rate(30);
+        ros::Rate rate(10);
         while(1) {
             try {
                 boost::this_thread::interruption_point();
@@ -273,6 +276,7 @@ private:
     }
 
     void updateHsvTrackbars() {
+        selectedHsvRange_ = cv::getTrackbarPos("Index", "HSVTrackbars");
         if(lastHsvRange_ != selectedHsvRange_) {
             lastHsvRange_ = selectedHsvRange_;
             cv::setTrackbarPos("Hmin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].hmin);
@@ -357,10 +361,13 @@ private:
     tf::TransformListener tf_sub_;
     image_transport::Publisher img_pub_;
     ros::Publisher pcl_tf_pub_;
+    bool haveImage_;
+    bool havePcl_;
 
     boost::thread uiThread;
 
     double voxelsize_;
+    int rows_, cols_;
     int selectedHsvRange_;
     int lastHsvRange_;
     int hmin_, smin_, vmin_, hmax_, smax_, vmax_;
@@ -382,7 +389,7 @@ int main(int argc, char** argv){
 
     object_detection od;
 
-    ros::Rate rate(0.2);
+    ros::Rate rate(1);
     while(ros::ok()) {
         ros::spinOnce();
         od.detect();
