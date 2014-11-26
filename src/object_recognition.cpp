@@ -83,6 +83,7 @@ public:
         cv::Mat neighborsclasses;
         cv::Mat neighborsdistant;
         kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
+        float resbayes = bc.predict(pcaRowImg);
         int sureness=0;
         for(int i=0;i<neighborcount;i++){
             if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
@@ -94,7 +95,7 @@ public:
         std::string result =intToDesc[res.at<float>(0)];
         ros::Time time = ros::Time::now();
 
-        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor){
+        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor && res.at<float>(0) == resbayes){
             ras_msgs::RAS_Evidence msg;
             msg.stamp =ros::Time::now();
             msg.object_id = result;
@@ -104,9 +105,21 @@ public:
             speakresult(result);
             lastobject = time;
         }
+        else if(time.sec-lastobject.sec >5 ){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = "Object";
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult("Object");
+            lastobject = time;
+        }
 
     }
-
+    void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
+        bc.train(traindata,responses);
+    }
 
     void train_knn(){
         std::vector<std::pair<std::string, std::vector<std::string> > > objects = readTestImagePaths(imagedir);
@@ -127,6 +140,10 @@ public:
         trainPCA(trainData,pcatrainData);
         std::cout << "Try to train"<< std::endl;
         kc.train(pcatrainData, responses);
+
+        //BayesClassifier:
+        train_BayesClassifier(pcatrainData,responses);
+
         std::cout<< "Training succeded"<< std::endl;
     }
 
@@ -194,6 +211,7 @@ private:
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
+    cv::NormalBayesClassifier bc;
     image_transport::ImageTransport _it;
     image_transport::Subscriber img_sub;
     ros::Time lastobject;
