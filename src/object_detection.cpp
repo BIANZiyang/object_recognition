@@ -155,16 +155,21 @@ public:
 
         DEBUG(std::cout << "Area: " << largestArea << std::endl;)
         cv::Rect objRect = cv::boundingRect(largestContour);
-        if(objRect.x - rectPadding_ >= 0 &&
-             objRect.y - rectPadding_ >= 0 &&
-             objRect.height + 2*rectPadding_ <= rows_ &&
-             objRect.width + 2*rectPadding_ <= cols_)
-        {
-            objRect.x -= rectPadding_;
-            objRect.y -= rectPadding_;
-            objRect.height += 2*rectPadding_;
-            objRect.width += 2*rectPadding_;
-        }
+//        if(objRect.x - rectPadding_ >= 0 &&
+//             objRect.y - rectPadding_ >= 0 &&
+//             objRect.height + 2*rectPadding_ <= rows_ &&
+//             objRect.width + 2*rectPadding_ <= cols_)
+//        {
+//            objRect.x -= rectPadding_;
+//            objRect.y -= rectPadding_;
+//            objRect.height += 2*rectPadding_;
+//            objRect.width += 2*rectPadding_;
+//        }
+
+        objRect.x = std::max(0, objRect.x - rectPadding_);
+        objRect.y = std::max(0, objRect.y - rectPadding_);
+        objRect.height = std::min(rows_, objRect.y + 2*rectPadding_);
+        objRect.width = std::min(cols_, objRect.x + 2*rectPadding_);
 
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
         DEBUG(cv::imshow("Combined filter", objImgOut);)
