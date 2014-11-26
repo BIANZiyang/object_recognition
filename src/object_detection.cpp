@@ -90,8 +90,9 @@ public:
     }
 
     void detect() {
-
+        //filterVoxelGrid(currentCloudPtr_,currentCloudPtr_);
         pcl::CropBox<Point> cb;
+
         std::vector<int> indices;
         cb.setMin(cbMin_);
         cb.setMax(cbMax_);
@@ -306,12 +307,12 @@ private:
 //        sor.filter (*filtered);
 //    }
 
-//    void filterVoxelGrid(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
-//        pcl::VoxelGrid<Point> sor;
-//        sor.setInputCloud(pcl_msg);
-//        sor.setLeafSize (voxelsize_, voxelsize_, voxelsize_);
-//        sor.filter (*filtered);
-//    }
+    void filterVoxelGrid(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
+        pcl::VoxelGrid<Point> sor;
+        sor.setInputCloud(pcl_msg);
+        sor.setLeafSize (voxelsize_, voxelsize_, voxelsize_);
+        sor.filter (*filtered);
+    }
 
 //    void filterHSV(Cloud::Ptr& pcl_msg, Cloud::Ptr& filtered){
 //        cv::Mat RGBMat(pcl_msg->height, pcl_msg->width, CV_8UC3);
