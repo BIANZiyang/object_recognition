@@ -97,6 +97,7 @@ public:
 
         int rows = currentCloudPtr_->height;
         int cols = currentCloudPtr_->width;
+
         if(rows > 0 && cols > 0) {
             cv::Mat depthMask = cv::Mat::zeros(rows, cols, CV_8UC1);
             for(size_t i = 0; i < indices.size(); ++i) {
@@ -112,9 +113,42 @@ public:
                 RGBMat.at<cv::Vec3b>(i)[1] = rgb[1];
                 RGBMat.at<cv::Vec3b>(i)[2] = rgb[0];
             }
-            cv::imshow("HSV filter", RGBMat);
             cv::imshow("Depth filter", depthMask);
+            cv::Mat filtered;
+
+            cv::Mat locations;
+            hsvfilter(RGBMat, filtered,locations);
+
+            cv::imshow("HSV filter", filtered);
+            cv::Mat result;
+            cv::bitwise_and(filtered,filtered,result,depthMask);
+            if(locations.rows>=0){
+//                cv_bridge::CvImagePtr cvPtr;
+                cv::Rect rec= cv::boundingRect(locations);
+                cv::Mat recImage = cv::Mat(result,rec);
+//                cvPtr->image=recImage;
+//                img_pub_.publish(cvPtr->toImageMsg());
+            }
+
+
         }
+    }
+    void hsvfilter(cv::Mat& input, cv::Mat& filtered,cv::Mat& locations){
+        cv::Mat workingimg;
+        cv::cvtColor(input, workingimg, CV_BGR2HSV);
+        cv::Scalar lower, upper;
+        lower[0] = hsvRanges_[0].hmin;
+        lower[1] = hsvRanges_[0].smin;
+        lower[2] = hsvRanges_[0].vmin;
+        upper[0] = hsvRanges_[0].hmax;
+        upper[1] = hsvRanges_[0].smax;
+        upper[2] = hsvRanges_[0].vmax;
+//        std::cout << lower << upper << std::endl;
+        cv::Mat mask;
+        cv::inRange(workingimg,lower,upper,mask);
+        cv::bitwise_and(workingimg,workingimg,filtered,mask=mask);
+
+        cv::findNonZero(mask, locations);
     }
 
 private:
@@ -290,6 +324,7 @@ private:
 //                    }
 //                }
 //            }
+    //        }
 //        }
 //        //cv::medianBlur(RGBMat, RGBMat, 7);
 //        cv::GaussianBlur(RGBMat, RGBMat, cv::Size(15,15), 0, 0);
@@ -332,10 +367,10 @@ private:
 
 int main(int argc, char** argv){
     ros::init(argc, argv, "object_detection");
-    cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE);
-    cv::namedWindow( "Mask1 window", CV_WINDOW_AUTOSIZE);
-    cv::namedWindow( "Mask2 window", CV_WINDOW_AUTOSIZE);
-    cv::namedWindow( "Combined", CV_WINDOW_AUTOSIZE);
+//    cv::namedWindow( "Display window", CV_WINDOW_AUTOSIZE);
+//    cv::namedWindow( "Mask1 window", CV_WINDOW_AUTOSIZE);
+//    cv::namedWindow( "Mask2 window", CV_WINDOW_AUTOSIZE);
+//    cv::namedWindow( "Combined", CV_WINDOW_AUTOSIZE);
 
     object_detection od;
 
