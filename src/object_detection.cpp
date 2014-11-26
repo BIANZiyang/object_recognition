@@ -49,8 +49,6 @@ public:
 
         cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
         cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
-
-        cv::namedWindow("Both filter", CV_WINDOW_AUTOSIZE);
         selectedHsvRange_ = 0;
         lastHsvRange_ = selectedHsvRange_;
         setupHsvTrackbars();
@@ -131,7 +129,6 @@ public:
             cv::Mat result;
 
             cv::bitwise_and(filtered,filtered,result,depthMask);
-            cv::imshow("Both filter",result);
             if(locations.rows>=0){
 //                cv_bridge::CvImagePtr cvPtr;
                 cv::Rect rec= cv::boundingRect(locations);
