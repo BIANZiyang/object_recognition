@@ -168,8 +168,8 @@ public:
 
         objRect.x = std::max(0, objRect.x - rectPadding_);
         objRect.y = std::max(0, objRect.y - rectPadding_);
-        objRect.height = std::min(rows_, objRect.y + 2*rectPadding_);
-        objRect.width = std::min(cols_, objRect.x + 2*rectPadding_);
+        objRect.height = std::min(rows_ - objRect.y, objRect.y + 2*rectPadding_);
+        objRect.width = std::min(cols_ - objRect.x, objRect.x + 2*rectPadding_);
 
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
         DEBUG(cv::imshow("Combined filter", objImgOut);)
