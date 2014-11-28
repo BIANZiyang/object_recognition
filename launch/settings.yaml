@@ -1,11 +1,12 @@
 object_detection:
+    minArea: 1000
     crop:
         wMin: -1
         wMax: 1
         hMin: 0.01
         hMax: 0.1
         dMin: 0.1
-        dMax: 3
+        dMax: 0.5
     voxel:
         leafsize: 0.005
     hsv0:
