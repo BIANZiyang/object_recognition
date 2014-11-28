@@ -1,24 +1,60 @@
 object_detection:
+    minArea: 1000
     crop:
         wMin: -1
         wMax: 1
         hMin: 0.01
         hMax: 0.1
         dMin: 0.1
-        dMax: 3
+        dMax: 0.5
     voxel:
         leafsize: 0.005
+    hsv0:
+        color: purple
+        hmin: 113
+        hmax: 166
+        smin: 70
+        smax: 136
+        vmin: 121
+        vmax: 220
     hsv1:
-        hmin: 0
-        hmax: 180
-        smin: 0
-        smax: 180
-        vmin: 56
-        vmax: 255
-    hsv2:
-        hmin: 43
-        hmax: 180
-        smin: 65
+        color: blue
+        hmin: 60
+        hmax: 117
+        smin: 49
         smax: 255
         vmin: 0
         vmax: 255
+    hsv2:
+        color: green
+        hmin: 24
+        hmax: 70
+        smin: 69
+        smax: 255
+        vmin: 48
+        vmax: 255
+    hsv3:
+        color: yellow
+        hmin: 12
+        hmax: 36
+        smin: 106
+        smax: 255
+        vmin: 151
+        vmax: 255
+    hsv4:
+        color: red
+        hmin: 159
+        hmax: 180
+        smin: 134
+        smax: 255
+        vmin: 0
+        vmax: 255
+    hsv5:
+        color: orange
+        hmin: 0
+        hmax: 49
+        smin: 157
+        smax: 255
+        vmin: 161
+        vmax: 255
+
