@@ -65,8 +65,9 @@ public:
 
         std::cout<< "Done the convertion"<< std::endl;
         cv::imshow("Display window",image);
-
         working=true;
+
+        Box_picked(1,this);
 
     }
 
