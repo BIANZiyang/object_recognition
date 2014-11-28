@@ -30,6 +30,8 @@ public:
         cv::namedWindow("Image_got_from_detection");
         lastobject= ros::Time::now();
          evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
+         std::fill_n(alreadyseen,10,0);
+         std::fill_n(lastobjects,2,0);
     }
     void imgFileCB(const std_msgs::String& pathToImg) {
         cout << "Classifying " << pathToImg.data << endl;
@@ -70,10 +72,16 @@ public:
 
         cv::cvtColor(inputImg,inputImg,CV_BGR2HSV);
 
+
+        //Bluring
+        cv::medianBlur(inputImg, inputImg, 9);
+
+
         cv::imshow("Image_got_from_detection",inputImg);
         cv::waitKey(1);
         cv::resize(inputImg,inputImg,cv::Size(sample_size_x,sample_size_y),cv::INTER_AREA);
         cv::Mat rowImg = matToFloatRow(inputImg);
+
 
         //PCA:
         cv::Mat pcaRowImg;
@@ -94,29 +102,37 @@ public:
         }
         cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;
         cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<< endl;
-        std::string result =intToDesc[res.at<float>(0)];
+        int resultid = res.at<float>(0);
+        std::string result =intToDesc[resultid];
         ros::Time time = ros::Time::now();
 
-        if(0!=result.compare(("background")) && time.sec-lastobject.sec >5 && sureness >= neighborcount*surenessfactor && res.at<float>(0) == resbayes){
-            ras_msgs::RAS_Evidence msg;
-            msg.stamp =ros::Time::now();
-            msg.object_id = result;
-            msg.group_number = 3;
-            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-            evidence_pub.publish(msg);
-            speakresult(result);
-            lastobject = time;
+        if(0!=result.compare(("background")) && sureness >= neighborcount*surenessfactor && resultid == resbayes){
+            if(lastobjects[0]==resultid && lastobjects[1]==resultid){
+                alreadyseen[resultid]++;
+                ras_msgs::RAS_Evidence msg;
+                msg.stamp =ros::Time::now();
+                msg.object_id = result;
+                msg.group_number = 3;
+                msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+                evidence_pub.publish(msg);
+                speakresult(result);
+                lastobject = time;
+                }
+            else{
+                lastobjects[1]=lastobjects[0];
+                lastobjects[0]=resultid;
+            }
         }
-        else if(time.sec-lastobject.sec >5 ){
-            ras_msgs::RAS_Evidence msg;
-            msg.stamp =ros::Time::now();
-            msg.object_id = "Object";
-            msg.group_number = 3;
-            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-            evidence_pub.publish(msg);
-            speakresult("Object");
-            lastobject = time;
-        }
+//        else if(time.sec-lastobject.sec >5 ){
+//            ras_msgs::RAS_Evidence msg;
+//            msg.stamp =ros::Time::now();
+//            msg.object_id = "Object";
+//            msg.group_number = 3;
+//            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+//            evidence_pub.publish(msg);
+//            speakresult("Object");
+//            lastobject = time;
+//        }
 
     }
     void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
@@ -201,6 +217,8 @@ public:
     }
 
 private:
+    int lastobjects[2];
+    int alreadyseen[10];
     cv::PCA pca;
     ros::Publisher espeak_pub , evidence_pub;
     ros::NodeHandle nh;
