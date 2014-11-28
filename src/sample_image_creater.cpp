@@ -22,7 +22,7 @@ public:
     {
     cuttingbox=modus;
     std::cout<< "Reached the Constructor"<< std::endl;
-
+    working = false;
     cv::namedWindow("BoxTrackbar",CV_WINDOW_NORMAL);
     if(cuttingbox){
         img_sub = _it.subscribe("/camera/rgb/image_rect_color", 1, &sample_image_creater::imageCB, this);
@@ -35,7 +35,7 @@ public:
 
     }
     else{
-        detection_sub = _it.subscribe("/object_recognition/filtered_image",1, &sample_image_creater::detectCB,this);
+        detection_sub = _it.subscribe("/object_detection/object",1, &sample_image_creater::detectCB,this);
     }
 
     waste=0;
@@ -61,10 +61,10 @@ public:
         std::cout<< "Reached the convertion"<< std::endl;
 
         cv::medianBlur(cv_ptr->image, image, 9);
-        cv::cvtColor(image,image, CV_BGR2HSV);
+        cv::cvtColor(image,cropped, CV_BGR2HSV);
 
         std::cout<< "Done the convertion"<< std::endl;
-        cv::imshow("Display window",image);
+        cv::imshow("Display window",cropped);
         working=true;
 
         Box_picked(1,this);
@@ -145,7 +145,7 @@ public:
     void reshape_image(cv::Mat& src, cv::Mat& dst ){
         cv::Size dsize = cv::Size(sample_size_x,sample_size_y);
         cv::resize(src,dst,dsize,cv::INTER_AREA);
-        imshow("Display Window",dst);
+        //imshow("Display Window",dst);
     }
 
     bool working;
@@ -169,9 +169,9 @@ int main(int argc, char** argv){
 
     std::cout<< "Reached the Main"<< std::endl;
     ros::init(argc, argv, "sample_image_creator");
-    bool cuttingbox = true;
+    bool cuttingbox = false;
     sample_image_creater sic(cuttingbox);
-    ros::Rate rate(10);
+    ros::Rate rate(1);
     while(ros::ok()) {
         ros::spinOnce();
         std::cout<< "After Spin"<< std::endl;
