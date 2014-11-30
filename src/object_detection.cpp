@@ -43,6 +43,8 @@ public:
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
         img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+        //pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
+        //img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
         img_pub_ = it_.advertise("/object_detection/object",1);
         pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
 
@@ -140,7 +142,7 @@ public:
             if(contours.size() > 0) {
                 for(size_t i = 0; i < contours.size(); ++i) {
                     double area = cv::contourArea(contours[i]);
-                    if(area > areaThreshold_ && area > largestArea) {
+                    if(area > areaMinThreshold_ && area > largestArea && area < areaMaxThreshold_ ) {
                         largestArea = area;
                         largestContour = contours[i];
                     }
@@ -168,7 +170,7 @@ public:
 
         objRect.x = std::max(0, objRect.x - rectPadding_);
         objRect.y = std::max(0, objRect.y - rectPadding_);
-        objRect.height = std::min(rows_ - objRect.y, objRect.height + 2*rectPadding_);
+        objRect.height = std::min(rows_ - objRect.y, objRect.height + 2*rectPadding_ + heightCorrection_);
         objRect.width = std::min(cols_ - objRect.x, objRect.width + 2*rectPadding_);
 
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
@@ -228,10 +230,10 @@ private:
         double& vmax;
     };
 
-    void cropDepthData(std::vector<int>& outIndices) {
+    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = false) {
         for(int index = 0; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
-            if(std::isnan(cp.y) ||
+            if((includeInvalid && std::isnan(cp.y)) ||
                     cp.y >= cbMin_[1] &&
                     cp.y <= cbMax_[1] &&
                     cp.x >= cbMin_[0] &&
@@ -253,7 +255,10 @@ private:
 
         getParam("object_detection/voxel/leafsize", voxelsize_, 0.005);
         getParam("object_detection/rectPadding", rectPadding_, 5);
-        getParam("object_detection/minArea", areaThreshold_, 10);
+
+        getParam("object_detection/heightCorrection", heightCorrection_, 10);
+        getParam("object_detection/minArea", areaMinThreshold_, 1000);
+        getParam("object_detection/maxArea", areaMaxThreshold_, 6000);
 
         std::string hsvParamName("object_detection/hsv");
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
@@ -348,11 +353,12 @@ private:
     boost::thread uiThread;
 
     double voxelsize_;
-    double areaThreshold_;
+    double areaMinThreshold_ , areaMaxThreshold_;
     int rectPadding_;
     int rows_, cols_;
     int selectedHsvRange_;
     int lastHsvRange_;
+    int heightCorrection_;
     int hmin_, smin_, vmin_, hmax_, smax_, vmax_;
     Eigen::Vector4f cbMin_, cbMax_;
     std::vector<hsvRange> hsvRanges_;

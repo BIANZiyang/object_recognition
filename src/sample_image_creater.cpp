@@ -171,7 +171,7 @@ int main(int argc, char** argv){
     ros::init(argc, argv, "sample_image_creator");
     bool cuttingbox = false;
     sample_image_creater sic(cuttingbox);
-    ros::Rate rate(1);
+    ros::Rate rate(10);
     while(ros::ok()) {
         ros::spinOnce();
         std::cout<< "After Spin"<< std::endl;

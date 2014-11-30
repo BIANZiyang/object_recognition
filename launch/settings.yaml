@@ -1,5 +1,6 @@
 object_detection:
     minArea: 1000
+    maxArea: 6000
     crop:
         wMin: -1
         wMax: 1
