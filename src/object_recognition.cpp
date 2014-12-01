@@ -15,9 +15,13 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sstream>
 #include <ras_msgs/RAS_Evidence.h>
+#include <robot_msgs/imagePosition.h>
+#include <robot_msgs/detectedObject.h>
 #include <image_transport/image_transport.h>
 using std::cout;
 using std::endl;
+
+#define D(X) X
 
 class object_recognition {
 public:
@@ -25,25 +29,28 @@ public:
         _it(nh){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
-        img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
+        //img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
+        imgposition_sub = nh.subscribe("/object_detection/object_postion",1, &object_recognition::recognitionCB,this);
         espeak_pub= nh.advertise<std_msgs::String>("/espeak/string",1);
+        objectposition_pub = nh.advertise<robot_msgs::detectedObject>("/object_recognition/detected_object",1);
         cv::namedWindow("Image_got_from_detection");
         lastobject= ros::Time::now();
-         evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
-         std::fill_n(alreadyseen,10,0);
-         std::fill_n(lastobjects,2,0);
+        evidence_pub = nh.advertise<ras_msgs::RAS_Evidence>("/evidence",1);
+        std::fill_n(alreadyseen,10,0);
+        std::fill_n(lastobjects,2,0);
+        std::fill_n(Point,3,0);
     }
     void imgFileCB(const std_msgs::String& pathToImg) {
-        cout << "Classifying " << pathToImg.data << endl;
+        D(cout << "Classifying " << pathToImg.data << endl;)
         cv::Mat inputImg = cv::imread(pathToImg.data);
-        cout << "Loading Image done" << endl;
+        D(cout << "Loading Image done" << endl;)
         cv::cvtColor(inputImg,inputImg,CV_HSV2BGR);
         classification(inputImg);
 
 
 
     }
-
+// For Normal Images:
     void recognitionCB(const sensor_msgs::ImageConstPtr& img_msg){
 
         //cout<< "got in CB"<< endl;
@@ -60,6 +67,26 @@ public:
         classification(cv_ptr->image);
 
     }
+// For Images with Poistion:
+    void recognitionCB(const robot_msgs::imagePosition& img_msg){
+
+        //cout<< "got in CB"<< endl;
+
+        cv_bridge::CvImagePtr cv_ptr;
+        try {
+            cv_ptr = cv_bridge::toCvCopy(img_msg.image, "bgr8");
+        }
+        catch (cv_bridge::Exception& e) {
+            ROS_ERROR("cv_bridge exception: %s", e.what());
+            return;
+        }
+        color= img_msg.color;
+        Point[0]=img_msg.point.x;
+        Point[1]=img_msg.point.y;
+        Point[2]=img_msg.point.z;
+        //cout<< "loaded pointer"<< endl;
+        classification(cv_ptr->image);
+}
 
     void trainPCA(cv::Mat& rowImg, cv::Mat& result){
         pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,0.99);
@@ -68,7 +95,7 @@ public:
     }
     void classification(cv::Mat inputImg){
         cv::Mat showimage;
-        cv::resize(inputImg,showimage,cv::Size(400,400));
+        cv::resize(inputImg,showimage,cv::Size(200,200));
 
         cv::cvtColor(inputImg,inputImg,CV_BGR2HSV);
 
@@ -100,23 +127,56 @@ public:
                 sureness++;
             }
         }
-        cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;
-        cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<< endl;
+        D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
+        D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<< endl;)
         int resultid = res.at<float>(0);
-        std::string result =intToDesc[resultid];
+        std::string result;
+        std::string resultbayes = intToDesc[resbayes];
+        std::string resultkn =intToDesc[resultid];
         ros::Time time = ros::Time::now();
-
-        if(0!=result.compare(("background")) && sureness >= neighborcount*surenessfactor && resultid == resbayes){
-            if(lastobjects[0]==resultid && lastobjects[1]==resultid){
+        int matchingcolorkn = resultkn.find(color);
+        int matchingcolorbayes = resultbayes.find(color);
+        if(resultid== resbayes && matchingcolorkn >=0){
+            result= resultkn;
+            D(std::cout << "All 3 have agreed" << std::endl;)
+        }
+        else if(resultid == resbayes){
+            result= resultkn;
+            D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
+        }
+        else if(matchingcolorbayes >=0){
+            result = resultbayes;
+            D(std::cout << "Color and Bayes Agreed" << std::endl;)
+        }
+        else if(matchingcolorkn >=0){
+            result = resultkn;
+            D(std::cout << "Color and KNN Agreed" << std::endl;)
+        }
+        else{
+            D(std::cout << "All 3 Classifier different " << std::endl;)
+            return;
+        }
+        if(0!=result.compare(("background")) && result.size()>0){
+            if(lastobjects[0]==resultid && lastobjects[1]==resultid || true){
                 alreadyseen[resultid]++;
-                ras_msgs::RAS_Evidence msg;
-                msg.stamp =ros::Time::now();
-                msg.object_id = result;
-                msg.group_number = 3;
-                msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-                evidence_pub.publish(msg);
+                // Publishing Msg:
+                robot_msgs::detectedObject detection_msgs;
+                detection_msgs.position.x= Point[0];
+                detection_msgs.position.y= Point[1];
+                detection_msgs.position.z= Point[2];
+                detection_msgs.object_id = result;
+                objectposition_pub.publish(detection_msgs);
+                // Publishing Evidence
+                ras_msgs::RAS_Evidence evidence_msg;
+                evidence_msg.stamp =ros::Time::now();
+                evidence_msg.object_id = result;
+                evidence_msg.group_number = 3;
+                cv_bridge::CvImage sendingmsg = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage);
+                evidence_msg.image_evidence = sendingmsg.toImageMsg().operator *();
+                evidence_pub.publish(evidence_msg);
                 speakresult(result);
                 lastobject = time;
+
                 }
             else{
                 lastobjects[1]=lastobjects[0];
@@ -156,13 +216,13 @@ public:
         }
         cv::Mat pcatrainData;
         trainPCA(trainData,pcatrainData);
-        std::cout << "Try to train"<< std::endl;
+        D(std::cout << "Try to train"<< std::endl;)
         kc.train(pcatrainData, responses);
 
         //BayesClassifier:
         train_BayesClassifier(pcatrainData,responses);
 
-        std::cout<< "Training succeded"<< std::endl;
+        D(std::cout<< "Training succeded"<< std::endl;)
     }
 
 
@@ -217,12 +277,14 @@ public:
     }
 
 private:
+    std::string color;
     int lastobjects[2];
     int alreadyseen[10];
+    float Point[3];
     cv::PCA pca;
-    ros::Publisher espeak_pub , evidence_pub;
+    ros::Publisher espeak_pub , evidence_pub, objectposition_pub;
     ros::NodeHandle nh;
-    ros::Subscriber img_path_sub;
+    ros::Subscriber img_path_sub, imgposition_sub;
     static const float surenessfactor = 0.5;
     static const int neighborcount= 3;
     static const int sample_size_x = 100;
