@@ -18,12 +18,13 @@
 #include <opencv2/imgproc/types_c.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
-
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 
+#include <robot_msgs/imagePosition.h>
+#include <pcl/common/centroid.h>
 typedef pcl::PCLPointCloud2 Cloud2;
 typedef pcl::PointXYZRGB Point;
 typedef pcl::PointCloud<Point> Cloud;
@@ -46,6 +47,8 @@ public:
         //pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
         //img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
         img_pub_ = it_.advertise("/object_detection/object",1);
+
+        imgPosition_pub_ = nh_.advertise<robot_msgs::imagePosition>("/object_detection/object_position",1);
         pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
 
         currentCloudPtr_ = Cloud::Ptr(new Cloud);
@@ -121,6 +124,7 @@ public:
         cv::Mat combinedMask;
         cv::medianBlur(currentImagePtr_->image, HSVmask, 9);
         double largestArea = 0;
+        std::string largestAreaColor = "";
         std::vector<cv::Point> largestContour;
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
@@ -132,7 +136,7 @@ public:
                 if(i == selectedHsvRange_) {
                     cv::imshow("HSV filter", HSVmask);
                 }
-            )
+            );
 
             cv::medianBlur(combinedMask, combinedMask, 3);
             std::vector<std::vector<cv::Point> > contours;
@@ -144,7 +148,9 @@ public:
                     double area = cv::contourArea(contours[i]);
                     if(area > areaMinThreshold_ && area > largestArea && area < areaMaxThreshold_ ) {
                         largestArea = area;
+                        largestAreaColor = hsvRanges_[i].color;
                         largestContour = contours[i];
+
                     }
                 }
 
@@ -154,6 +160,27 @@ public:
         if(largestContour.size() == 0) {
             return;
         }
+
+        //Getting the Position of the largest Contour
+        Cloud objectCloud;
+        cv::Point2f point;
+        //cv::Mat contourMask  = cv::Mat::zeros(rows_, cols_, CV_8U);
+        for(int x=0;x<rows_; x++){
+            for(int y=0;y<cols_; y++){
+                point.x=x;
+                point.y=y;
+
+
+                if(0<cv::pointPolygonTest(largestContour,point,false)){
+                    //contourMask.at<char>(x,y)=255;
+                    objectCloud.push_back(currentCloudPtr_->at(x,y));
+                }
+            }
+        }
+
+        Eigen::Vector4f massCenter;
+        pcl::compute3DCentroid(objectCloud, massCenter);
+
 
         DEBUG(std::cout << "Area: " << largestArea << std::endl;)
         cv::Rect objRect = cv::boundingRect(largestContour);
@@ -173,13 +200,28 @@ public:
         objRect.height = std::min(rows_ - objRect.y, objRect.height + 2*rectPadding_ + heightCorrection_);
         objRect.width = std::min(cols_ - objRect.x, objRect.width + 2*rectPadding_);
 
+
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
         DEBUG(cv::imshow("Combined filter", objImgOut);)
+
+
+        //Sending the msg:
+
+        geometry_msgs::Point dir_msg_out;
+        dir_msg_out.x = massCenter[0];
+        dir_msg_out.y = massCenter[1];
+        dir_msg_out.z = massCenter[2];
 
         cv_bridge::CvImage img;
         img.image = objImgOut;
         sensor_msgs::ImagePtr imgOut = img.toImageMsg();
         imgOut->encoding = "bgr8";
+
+        robot_msgs::imagePosition msgOut;
+        msgOut.color=largestAreaColor;
+        msgOut.point=dir_msg_out;
+        msgOut.image = imgOut.operator *();
+        imgPosition_pub_.publish(msgOut);
         img_pub_.publish(imgOut);
     }
 
@@ -346,7 +388,7 @@ private:
     image_transport::Subscriber img_sub_;
     tf::TransformListener tf_sub_;
     image_transport::Publisher img_pub_;
-    ros::Publisher pcl_tf_pub_;
+    ros::Publisher pcl_tf_pub_ , imgPosition_pub_;
     bool haveImage_;
     bool havePcl_;
 
