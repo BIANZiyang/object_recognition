@@ -113,24 +113,26 @@ public:
 
         std::vector<int> indices;
         cropDepthData(indices);
-
+        //DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
         cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
         for(size_t i = 0; i < indices.size(); ++i) {
             depthMask.at<char>(indices[i]) = 255;
         }
         DEBUG(cv::imshow("Depth filter", depthMask);)
-
+        //DEBUG(std::cout<< "Created the DepthMask " << std::endl;)
         cv::Mat HSVmask;
         cv::Mat combinedMask;
         cv::medianBlur(currentImagePtr_->image, HSVmask, 9);
         double largestArea = 0;
         std::string largestAreaColor = "";
         std::vector<cv::Point> largestContour;
+        //DEBUG(std::cout<< " Looping through " << hsvRanges_.size()<< " Hsv Colors" << std::endl;)
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
             cv::inRange(HSVmask, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
             combinedMask = depthMask & HSVmask;
+            //DEBUG(std::cout<< "created Mask with depth and HSV of color :   "<< hsvRanges_[i].color << std::endl;)
 
             DEBUG(
                 if(i == selectedHsvRange_) {
@@ -142,14 +144,18 @@ public:
             std::vector<std::vector<cv::Point> > contours;
             std::vector<cv::Vec4i> notUsedHierarchy;
             cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
-
+            //DEBUG(std::cout<< " Found Contours  "<< contours.size() << std::endl;)
             if(contours.size() > 0) {
-                for(size_t i = 0; i < contours.size(); ++i) {
-                    double area = cv::contourArea(contours[i]);
+                for(size_t j = 0; j < contours.size(); ++j) {
+                    //DEBUG(std::cout<< "Determining size of the inside area " << std::endl;)
+                    double area = cv::contourArea(contours[j]);
+                     //DEBUG(std::cout<< "Following area was detected :   "<< area << std::endl;)
                     if(area > areaMinThreshold_ && area > largestArea && area < areaMaxThreshold_ ) {
+                        //DEBUG(std::cout<< " Trying to overwrite largest Area" << std::endl;)
                         largestArea = area;
                         largestAreaColor = hsvRanges_[i].color;
-                        largestContour = contours[i];
+                        largestContour = contours[j];
+                        //DEBUG(std::cout<< "new largest Area found, following size :  "<< area << std::endl;)
 
                     }
                 }
@@ -164,24 +170,30 @@ public:
         //Getting the Position of the largest Contour
         Cloud objectCloud;
         cv::Point2f point;
+        //DEBUG(std::cout<< " Try to get a Pointcloud in the largest Contour" << std::endl;)
         //cv::Mat contourMask  = cv::Mat::zeros(rows_, cols_, CV_8U);
-        for(int x=0;x<rows_; x++){
-            for(int y=0;y<cols_; y++){
+        int debug=0;
+
+        for(int x=0;x<cols_; x++){
+            for(int y=0;y<rows_; y++){
                 point.x=x;
                 point.y=y;
 
 
                 if(0<cv::pointPolygonTest(largestContour,point,false)){
                     //contourMask.at<char>(x,y)=255;
-                    objectCloud.push_back(currentCloudPtr_->at(x,y));
+                    objectCloud.points.push_back(currentCloudPtr_->at(x,y));
+
+                    //DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
+                    debug++;
                 }
             }
         }
-
+        DEBUG(std::cout<< "Got Pointcloud with "<< debug << " or "<< objectCloud.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
         Eigen::Vector4f massCenter;
         pcl::compute3DCentroid(objectCloud, massCenter);
 
-
+        DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
         DEBUG(std::cout << "Area: " << largestArea << std::endl;)
         cv::Rect objRect = cv::boundingRect(largestContour);
 //        if(objRect.x - rectPadding_ >= 0 &&
@@ -204,7 +216,7 @@ public:
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
         DEBUG(cv::imshow("Combined filter", objImgOut);)
 
-
+        DEBUG(std::cout<< " Try  to send msg" << std::endl;)
         //Sending the msg:
 
         geometry_msgs::Point dir_msg_out;
@@ -223,6 +235,7 @@ public:
         msgOut.image = imgOut.operator *();
         imgPosition_pub_.publish(msgOut);
         img_pub_.publish(imgOut);
+        DEBUG(std::cout<< "Sending Completed " << std::endl;)
     }
 
 
@@ -272,7 +285,7 @@ private:
         double& vmax;
     };
 
-    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = false) {
+    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = true) {
         for(int index = 0; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
             if((includeInvalid && std::isnan(cp.y)) ||
