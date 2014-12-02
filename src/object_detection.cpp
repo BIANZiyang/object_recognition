@@ -43,7 +43,7 @@ public:
         loadParams();
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
-        img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+        //img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
         //pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
         //img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
         img_pub_ = it_.advertise("/object_detection/object",1);
@@ -100,8 +100,16 @@ public:
         currentCloudPtr_->header.frame_id = "robot_center";
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
+
+        //Getting Image from the Cloud
+        sensor_msgs::Image tempImageMsg;
+        pcl::toROSMsg(msgOut,tempImageMsg);
+        currentImagePtr_= cv_bridge::toCvCopy(tempImageMsg, "bgr8");
+        haveImage_=true;
+
         pcl_tf_pub_.publish(msgOut);
         havePcl_ = true;
+
 
     }
 
@@ -110,7 +118,6 @@ public:
             DEBUG(std::cout << "No PCL or image set" << std::endl;)
             return;
         }
-
         std::vector<int> indices;
         cropDepthData(indices);
         //DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
@@ -183,6 +190,7 @@ public:
                 if(0<cv::pointPolygonTest(largestContour,point,false)){
                     //contourMask.at<char>(x,y)=255;
                     objectCloud.points.push_back(currentCloudPtr_->at(x,y));
+
 
                     //DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
                     debug++;
