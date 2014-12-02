@@ -31,8 +31,14 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define DEBUG(X)
-#define DEBUG(X) {X}
+//#define USE_DEBUG
+
+#ifdef USE_DEBUG
+    #define DEBUG(X) X
+    #define DCB     //Debug Code Block
+#else
+    #define DEBUG(X)
+#endif
 
 class object_detection{
 public:
@@ -44,29 +50,29 @@ public:
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
         img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
-        //pcl_sub_ = nh_.subscribe("/snapshot/pcl", 1, &object_detection::pointCloudCB, this);
-        //img_sub_ = it_.subscribe("/snapshot/img", 1, &object_detection::imageCB, this);
-        img_pub_ = it_.advertise("/object_detection/object",1);
-
         imgPosition_pub_ = nh_.advertise<robot_msgs::imagePosition>("/object_detection/object_position",1);
-        pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
+        img_pub_ = it_.advertise("/object_detection/object",1);
 
         currentCloudPtr_ = Cloud::Ptr(new Cloud);
 
-        cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
-        cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
-        cv::namedWindow("Input image", CV_WINDOW_AUTOSIZE);
-        cv::namedWindow("Combined filter", CV_WINDOW_AUTOSIZE);
-
-        selectedHsvRange_ = 0;
-        lastHsvRange_ = -1;
-        DEBUG(setupHsvTrackbars();)
-        uiThread = boost::thread(&object_detection::asyncImshow, this);
+#ifdef DCB
+            pcl_tf_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_detection/transformed", 1);
+            selectedHsvRange_ = 0;
+            lastHsvRange_ = -1;
+            cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
+            cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
+            cv::namedWindow("Input image", CV_WINDOW_AUTOSIZE);
+            cv::namedWindow("Combined filter", CV_WINDOW_AUTOSIZE);
+            setupHsvTrackbars();
+            uiThread = boost::thread(&object_detection::asyncImshow, this);
+#endif
     }
 
     ~object_detection() {
-        uiThread.interrupt();
-        uiThread.join();
+#ifdef DCB
+            uiThread.interrupt();
+            uiThread.join();
+#endif
     }
 
     void imageCB(const sensor_msgs::ImageConstPtr& img_msg) {
@@ -80,15 +86,17 @@ public:
             return;
         }
         currentImagePtr_ = cvPtr;
-        DEBUG(cv::imshow("Input image", currentImagePtr_->image);)
         rows_ = cvPtr->image.rows;
         cols_ = cvPtr->image.cols;
         haveImage_ = true;
+
+        DEBUG(cv::imshow("Input image", currentImagePtr_->image);)
     }
 
     void pointCloudCB(const sensor_msgs::PointCloud2ConstPtr& pclMsg) {
         DEBUG(std::cout << "Got pcl callback" << std::endl;)
-                pcl::fromROSMsg(*pclMsg, *currentCloudPtr_);
+
+        pcl::fromROSMsg(*pclMsg, *currentCloudPtr_);
         tf::StampedTransform transform;
         try {
             tf_sub_.lookupTransform("/camera_rgb_optical_frame", "robot_center", ros::Time(0), transform);
@@ -98,10 +106,13 @@ public:
         }
         pcl_ros::transformPointCloud(*currentCloudPtr_, *currentCloudPtr_, transform);
         currentCloudPtr_->header.frame_id = "robot_center";
-        sensor_msgs::PointCloud2 msgOut;
-        pcl::toROSMsg(*currentCloudPtr_, msgOut);
-        pcl_tf_pub_.publish(msgOut);
         havePcl_ = true;
+
+#ifdef DCB
+            sensor_msgs::PointCloud2 msgOut;
+            pcl::toROSMsg(*currentCloudPtr_, msgOut);
+            pcl_tf_pub_.publish(msgOut);
+#endif
 
     }
 
@@ -118,6 +129,7 @@ public:
         for(size_t i = 0; i < indices.size(); ++i) {
             depthMask.at<char>(indices[i]) = 255;
         }
+
         DEBUG(cv::imshow("Depth filter", depthMask);)
         //DEBUG(std::cout<< "Created the DepthMask " << std::endl;)
         cv::Mat HSVmask;
@@ -134,11 +146,11 @@ public:
             combinedMask = depthMask & HSVmask;
             //DEBUG(std::cout<< "created Mask with depth and HSV of color :   "<< hsvRanges_[i].color << std::endl;)
 
-            DEBUG(
-                if(i == selectedHsvRange_) {
-                    cv::imshow("HSV filter", HSVmask);
-                }
-            );
+#ifdef DCB
+            if(i == selectedHsvRange_) {
+                cv::imshow("HSV filter", HSVmask);
+            }
+#endif
 
             cv::medianBlur(combinedMask, combinedMask, 3);
             std::vector<std::vector<cv::Point> > contours;
@@ -180,7 +192,7 @@ public:
                 point.y=y;
 
 
-                if(0<cv::pointPolygonTest(largestContour,point,false)){
+                if(0 < cv::pointPolygonTest(largestContour,point,false)){
                     //contourMask.at<char>(x,y)=255;
                     objectCloud.points.push_back(currentCloudPtr_->at(x,y));
 
@@ -189,24 +201,15 @@ public:
                 }
             }
         }
+
         DEBUG(std::cout<< "Got Pointcloud with "<< debug << " or "<< objectCloud.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
         Eigen::Vector4f massCenter;
         pcl::compute3DCentroid(objectCloud, massCenter);
 
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
         DEBUG(std::cout << "Area: " << largestArea << std::endl;)
-        cv::Rect objRect = cv::boundingRect(largestContour);
-//        if(objRect.x - rectPadding_ >= 0 &&
-//             objRect.y - rectPadding_ >= 0 &&
-//             objRect.height + 2*rectPadding_ <= rows_ &&
-//             objRect.width + 2*rectPadding_ <= cols_)
-//        {
-//            objRect.x -= rectPadding_;
-//            objRect.y -= rectPadding_;
-//            objRect.height += 2*rectPadding_;
-//            objRect.width += 2*rectPadding_;
-//        }
 
+        cv::Rect objRect = cv::boundingRect(largestContour);
         objRect.x = std::max(0, objRect.x - rectPadding_);
         objRect.y = std::max(0, objRect.y - rectPadding_);
         objRect.height = std::min(rows_ - objRect.y, objRect.height + 2*rectPadding_ + heightCorrection_);
@@ -288,7 +291,9 @@ private:
     void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = true) {
         for(int index = 0; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
-            if((includeInvalid && std::isnan(cp.y)) ||
+            if((includeInvalid && ( pcl_isnan(cp.x) ||
+                                    pcl_isnan(cp.y) ||
+                                    pcl_isnan(cp.z))) ||
                     cp.y >= cbMin_[1] &&
                     cp.y <= cbMax_[1] &&
                     cp.x >= cbMin_[0] &&
@@ -347,65 +352,69 @@ private:
         }
         variable = standardValue;
         DEBUG(std::cout << paramName << "not found" << std::endl;)
-                return false;
+        return false;
     }
 
-    void asyncImshow() {
-        ros::Rate rate(1);
-        while(1) {
-            try {
-                boost::this_thread::interruption_point();
-                updateHsvTrackbars();
-                cv::waitKey(1);
-                rate.sleep();
-            } catch(boost::thread_interrupted&){
-                return;
+#ifdef DCB
+        //Separate thread to update the UI when debugging
+        void asyncImshow() {
+            ros::Rate rate(1);
+            while(1) {
+                try {
+                    boost::this_thread::interruption_point();
+                    updateHsvTrackbars();
+                    cv::waitKey(1);
+                    rate.sleep();
+                } catch(boost::thread_interrupted&){
+                    return;
+                }
             }
         }
-    }
 
-    void setupHsvTrackbars() {
-        cv::namedWindow("HSVTrackbars",CV_WINDOW_NORMAL);
-        cv::createTrackbar("Index", "HSVTrackbars", &selectedHsvRange_, hsvRanges_.size()-1);
-        cv::createTrackbar("Hmin", "HSVTrackbars", NULL, 180);
-        cv::createTrackbar("Hmax", "HSVTrackbars", NULL, 180);
-        cv::createTrackbar("Smin", "HSVTrackbars", NULL, 255);
-        cv::createTrackbar("Smax", "HSVTrackbars", NULL, 255);
-        cv::createTrackbar("Vmin", "HSVTrackbars", NULL, 255);
-        cv::createTrackbar("Vmax", "HSVTrackbars", NULL, 255);
-    }
-
-    void updateHsvTrackbars() {
-        selectedHsvRange_ = cv::getTrackbarPos("Index", "HSVTrackbars");
-        if(lastHsvRange_ != selectedHsvRange_) {
-            lastHsvRange_ = selectedHsvRange_;
-            cv::setTrackbarPos("Hmin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].hmin);
-            cv::setTrackbarPos("Hmax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].hmax);
-            cv::setTrackbarPos("Smin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].smin);
-            cv::setTrackbarPos("Smax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].smax);
-            cv::setTrackbarPos("Vmin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].vmin);
-            cv::setTrackbarPos("Vmax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].vmax);
+        //Setup all the UI trackbars when debugging
+        void setupHsvTrackbars() {
+            cv::namedWindow("HSVTrackbars",CV_WINDOW_NORMAL);
+            cv::createTrackbar("Index", "HSVTrackbars", &selectedHsvRange_, hsvRanges_.size()-1);
+            cv::createTrackbar("Hmin", "HSVTrackbars", NULL, 180);
+            cv::createTrackbar("Hmax", "HSVTrackbars", NULL, 180);
+            cv::createTrackbar("Smin", "HSVTrackbars", NULL, 255);
+            cv::createTrackbar("Smax", "HSVTrackbars", NULL, 255);
+            cv::createTrackbar("Vmin", "HSVTrackbars", NULL, 255);
+            cv::createTrackbar("Vmax", "HSVTrackbars", NULL, 255);
         }
 
-        hsvRanges_[selectedHsvRange_].hmin = cv::getTrackbarPos("Hmin", "HSVTrackbars");
-        hsvRanges_[selectedHsvRange_].hmax = cv::getTrackbarPos("Hmax", "HSVTrackbars");
-        hsvRanges_[selectedHsvRange_].smin = cv::getTrackbarPos("Smin", "HSVTrackbars");
-        hsvRanges_[selectedHsvRange_].smax = cv::getTrackbarPos("Smax", "HSVTrackbars");
-        hsvRanges_[selectedHsvRange_].vmin = cv::getTrackbarPos("Vmin", "HSVTrackbars");
-        hsvRanges_[selectedHsvRange_].vmax = cv::getTrackbarPos("Vmax", "HSVTrackbars");
-    }
+        //Read values from trackbars when debugging
+        void updateHsvTrackbars() {
+            selectedHsvRange_ = cv::getTrackbarPos("Index", "HSVTrackbars");
+            if(lastHsvRange_ != selectedHsvRange_) {
+                lastHsvRange_ = selectedHsvRange_;
+                cv::setTrackbarPos("Hmin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].hmin);
+                cv::setTrackbarPos("Hmax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].hmax);
+                cv::setTrackbarPos("Smin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].smin);
+                cv::setTrackbarPos("Smax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].smax);
+                cv::setTrackbarPos("Vmin", "HSVTrackbars", hsvRanges_[selectedHsvRange_].vmin);
+                cv::setTrackbarPos("Vmax", "HSVTrackbars", hsvRanges_[selectedHsvRange_].vmax);
+            }
+
+            hsvRanges_[selectedHsvRange_].hmin = cv::getTrackbarPos("Hmin", "HSVTrackbars");
+            hsvRanges_[selectedHsvRange_].hmax = cv::getTrackbarPos("Hmax", "HSVTrackbars");
+            hsvRanges_[selectedHsvRange_].smin = cv::getTrackbarPos("Smin", "HSVTrackbars");
+            hsvRanges_[selectedHsvRange_].smax = cv::getTrackbarPos("Smax", "HSVTrackbars");
+            hsvRanges_[selectedHsvRange_].vmin = cv::getTrackbarPos("Vmin", "HSVTrackbars");
+            hsvRanges_[selectedHsvRange_].vmax = cv::getTrackbarPos("Vmax", "HSVTrackbars");
+        }
+#endif
+
 
     ros::NodeHandle nh_;
     ros::Subscriber pcl_sub_;
     image_transport::ImageTransport it_;
     image_transport::Subscriber img_sub_;
-    tf::TransformListener tf_sub_;
     image_transport::Publisher img_pub_;
-    ros::Publisher pcl_tf_pub_ , imgPosition_pub_;
+    tf::TransformListener tf_sub_;
+    ros::Publisher imgPosition_pub_;
     bool haveImage_;
     bool havePcl_;
-
-    boost::thread uiThread;
 
     double voxelsize_;
     double areaMinThreshold_ , areaMaxThreshold_;
@@ -420,6 +429,12 @@ private:
 
     Cloud::Ptr currentCloudPtr_;
     cv_bridge::CvImagePtr currentImagePtr_;
+
+#ifdef DCB
+    ros::Publisher pcl_tf_pub_;
+    boost::thread uiThread;
+#endif
+
 };
 
 
