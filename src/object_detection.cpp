@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define USE_DEBUG
+#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -202,12 +202,15 @@ public:
             }
         }
 
-        DEBUG(std::cout<< "Got Pointcloud with "<< debug << " or "<< objectCloud.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
+        DEBUG(std::cout<< "Got Pointcloud with " << objectCloud.points.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
         Eigen::Vector4f massCenter;
         std::vector<int> indicies;
-        pcl::removeNaNFromPointCloud(objectCloud,objectCloud,indicies);
-        DEBUG(std::cout<< "Got Pointcloud with "<< objectCloud.size()  << "  Points after removing NaN" << std::endl;)
+        Cloud withoutNan;
+        objectCloud.is_dense=false;
+        pcl::removeNaNFromPointCloud(objectCloud,withoutNan,indicies);
+        DEBUG(std::cout<< "Got Pointcloud with "<< withoutNan.points.size()  << "  Points after removing NaN" << std::endl;)
         pcl::compute3DCentroid(objectCloud, massCenter);
+
 
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
         DEBUG(std::cout << "Area: " << largestArea << std::endl;)
