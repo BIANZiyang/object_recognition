@@ -9,5 +9,5 @@
         </include>
     <node pkg="floor_detection" type="floor_detection" name="floor_detection" output="screen" />
     <node pkg="object_recognition" type="object_detection" name="object_detection" output="screen" />
-    <!-- <node pkg="object_recognition" type="object_recognition" name="object_recognition" output="screen" /> -->
+    <!--<node pkg="object_recognition" type="object_recognition" name="object_recognition" output="screen" /> -->
 </launch>

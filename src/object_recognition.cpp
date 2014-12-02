@@ -30,7 +30,7 @@ public:
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         //img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
-        imgposition_sub = nh.subscribe("/object_detection/object_postion",1, &object_recognition::recognitionCB,this);
+        imgposition_sub = nh.subscribe("/object_detection/object_position",1, &object_recognition::recognitionCBpos,this);
         espeak_pub= nh.advertise<std_msgs::String>("/espeak/string",1);
         objectposition_pub = nh.advertise<robot_msgs::detectedObject>("/object_recognition/detected_object",1);
         cv::namedWindow("Image_got_from_detection");
@@ -68,7 +68,7 @@ public:
 
     }
 // For Images with Poistion:
-    void recognitionCB(const robot_msgs::imagePosition& img_msg){
+    void recognitionCBpos(const robot_msgs::imagePosition& img_msg){
 
         //cout<< "got in CB"<< endl;
 
@@ -81,6 +81,7 @@ public:
             return;
         }
         color= img_msg.color;
+        if(0==color.compare(("orange"))) color="patric";
         Point[0]=img_msg.point.x;
         Point[1]=img_msg.point.y;
         Point[2]=img_msg.point.z;
@@ -128,7 +129,7 @@ public:
             }
         }
         D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
-        D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<< endl;)
+                D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<<" Given color: "<< color << endl;)
         int resultid = res.at<float>(0);
         std::string result;
         std::string resultbayes = intToDesc[resbayes];
@@ -146,6 +147,7 @@ public:
         }
         else if(matchingcolorbayes >=0){
             result = resultbayes;
+            resultid=resbayes;
             D(std::cout << "Color and Bayes Agreed" << std::endl;)
         }
         else if(matchingcolorkn >=0){
