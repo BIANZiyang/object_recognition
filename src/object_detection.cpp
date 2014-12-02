@@ -184,13 +184,16 @@ public:
                     //contourMask.at<char>(x,y)=255;
                     objectCloud.points.push_back(currentCloudPtr_->at(x,y));
 
-                    //DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
+                    DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
                     debug++;
                 }
             }
         }
         DEBUG(std::cout<< "Got Pointcloud with "<< debug << " or "<< objectCloud.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
         Eigen::Vector4f massCenter;
+        std::vector<int> indicies;
+        pcl::removeNaNFromPointCloud(objectCloud,objectCloud,indicies);
+        DEBUG(std::cout<< "Got Pointcloud with "<< objectCloud.size()  << "  Points after removing NaN" << std::endl;)
         pcl::compute3DCentroid(objectCloud, massCenter);
 
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
