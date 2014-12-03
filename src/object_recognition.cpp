@@ -87,11 +87,15 @@ public:
         Point[2]=img_msg.point.z;
         //cout<< "loaded pointer"<< endl;
         classification(cv_ptr->image);
+
 }
 
     void trainPCA(cv::Mat& rowImg, cv::Mat& result){
-        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,0.99);
+        std::cout << " Rows before PCA " << rowImg.cols << std::endl;
+        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
         pca.project(rowImg,result);
+
+        std::cout << " Rows after PCA " << result.cols << std::endl;
 
     }
     void classification(cv::Mat inputImg){
@@ -103,7 +107,6 @@ public:
 
         //Bluring
         cv::medianBlur(inputImg, inputImg, 9);
-
 
         cv::imshow("Image_got_from_detection",inputImg);
         cv::waitKey(1);
@@ -129,7 +132,7 @@ public:
             }
         }
         D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
-                D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<<" Given color: "<< color << endl;)
+        D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<<" Given color: "<< color << endl;)
         int resultid = res.at<float>(0);
         std::string result;
         std::string resultbayes = intToDesc[resbayes];
@@ -144,6 +147,10 @@ public:
         else if(resultid == resbayes){
             result= resultkn;
             D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
+        }
+        else if(matchingcolorbayes >=0 && matchingcolorkn >=0 ){
+            result = resultkn;
+            D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
         }
         else if(matchingcolorbayes >=0){
             result = resultbayes;
@@ -162,6 +169,7 @@ public:
             if(lastobjects[0]==resultid && lastobjects[1]==resultid || true){
                 alreadyseen[resultid]++;
                 // Publishing Msg:
+                D(std::cout << "Detected an " << result << std::endl;)
                 robot_msgs::detectedObject detection_msgs;
                 detection_msgs.position.x= Point[0];
                 detection_msgs.position.y= Point[1];
@@ -264,7 +272,8 @@ public:
         for(int x=0; x < rows; x++){
             for (int y=0; y<cols; y++){
                 res.at<float>(0,((x*cols + y)*attributes))      = float(input.at<cv::Vec3b>(x,y)[0]);
-                res.at<float>(0,((x*cols + y)*attributes + 1)) = float(input.at<cv::Vec3b>(x,y)[1]);
+                //res.at<float>(0,((x*cols + y)*attributes + 1)) = float(input.at<cv::Vec3b>(x,y)[1]);
+                //res.at<float>(0,((x*cols + y)*attributes + 2)) = float(input.at<cv::Vec3b>(x,y)[2]);
             }
         }
         return res;
@@ -288,10 +297,11 @@ private:
     ros::NodeHandle nh;
     ros::Subscriber img_path_sub, imgposition_sub;
     static const float surenessfactor = 0.5;
-    static const int neighborcount= 3;
+    static const int neighborcount= 7;
     static const int sample_size_x = 100;
     static const int sample_size_y = 100;
-    static const int attributes = 2;
+    static const int attributes = 1;
+    static const float pcaaccuracy = 0.999;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
