@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-#define USE_DEBUG
+//#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -45,7 +45,7 @@ public:
     object_detection() :
         it_(nh_)
     {
-        hsvRanges_.resize(6);
+        hsvRanges_.resize(7);
         loadParams();
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
@@ -65,7 +65,7 @@ public:
             cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Blurred image", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Combined filter", CV_WINDOW_AUTOSIZE);
-//            setupHsvTrackbars();
+            setupHsvTrackbars();
             uiThread = boost::thread(&object_detection::asyncImshow, this);
 #endif
     }
@@ -106,21 +106,22 @@ public:
         }
         pcl_ros::transformPointCloud(*currentCloudPtr_, *currentCloudPtr_, transform);
         currentCloudPtr_->header.frame_id = "robot_center";
+
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
-
         //Getting Image from the Cloud
         sensor_msgs::Image tempImageMsg;
         pcl::toROSMsg(msgOut,tempImageMsg);
         currentImagePtr_= cv_bridge::toCvCopy(tempImageMsg, "bgr8");
         haveImage_=true;
-
+        rows_ = currentImagePtr_->image.rows;
+        cols_ = currentImagePtr_->image.cols;
         havePcl_ = true;
 
-
 #ifdef DCB
-
-            pcl_tf_pub_.publish(msgOut);
+        //sensor_msgs::PointCloud2 msgOut;
+        pcl::toROSMsg(*currentCloudPtr_, msgOut);
+        pcl_tf_pub_.publish(msgOut);
 #endif
 
     }
@@ -130,9 +131,10 @@ public:
             DEBUG(std::cout << "No PCL or image set" << std::endl;)
             return;
         }
+
         std::vector<int> indices;
         cropDepthData(indices);
-        //DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
+        DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
         cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
         for(size_t i = 0; i < indices.size(); ++i) {
             depthMask.at<char>(indices[i]) = 255;
@@ -144,7 +146,7 @@ public:
         cv::medianBlur(currentImagePtr_->image, blurredImage, 15);
 
 #ifdef DCB
-       // cv::imshow("Depth filter", depthMask);
+        cv::imshow("Depth filter", depthMask);
         cv::imshow("Blurred image", blurredImage);
         cv::Mat savedHSVMask;
         cv::Mat saveCombinedMask;
@@ -158,7 +160,17 @@ public:
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             cv::inRange(blurredImage, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
-            combinedMask = depthMask & HSVmask;
+            /*
+
+            if(hsvRanges_[i].inverted) {
+                cv::bitwise_not(HSVmask, HSVmask);
+            }
+
+            if(hsvRanges_[i].color == "red") {
+                cv::imshow("HSV filter", HSVmask);
+            }*/
+
+            combinedMask = HSVmask & depthMask;
             std::vector<std::vector<cv::Point> > contours;
             std::vector<cv::Vec4i> notUsedHierarchy;
 
@@ -296,7 +308,7 @@ private:
 
         cv::Scalar min;
         cv::Scalar max;
-
+        bool inverted;
         double& hmin;
         double& smin;
         double& vmin;
@@ -305,7 +317,7 @@ private:
         double& vmax;
     };
 
-    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = false) {
+    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid =false) {
         for(int index = 0; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
             if(includeInvalid && isnan(cp.x)) {
@@ -347,6 +359,7 @@ private:
             getParam(ss.str() + "/smax", hsvRanges_[i].smax, 255);
             getParam(ss.str() + "/vmax", hsvRanges_[i].vmax, 255);
             getParam(ss.str() + "/color", hsvRanges_[i].color, "");
+            getParam(ss.str() + "/inverted", hsvRanges_[i].inverted, false);
         }
     }
 
@@ -375,11 +388,11 @@ private:
 #ifdef DCB
         //Separate thread to update the UI when debugging
         void asyncImshow() {
-            ros::Rate rate(2);
+            ros::Rate rate(5);
             while(1) {
                 try {
                     boost::this_thread::interruption_point();
-//                    updateHsvTrackbars();
+                    updateHsvTrackbars();
                     cv::waitKey(1);
                     rate.sleep();
                 } catch(boost::thread_interrupted&){
@@ -460,7 +473,7 @@ int main(int argc, char** argv){
     ros::init(argc, argv, "object_detection");
     object_detection od;
 
-    ros::Rate rate(1);
+    ros::Rate rate(5);
     while(ros::ok()) {
         ros::spinOnce();
         od.detect();

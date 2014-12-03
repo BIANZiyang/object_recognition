@@ -6,7 +6,7 @@ object_detection:
     crop:
         wMin: -1
         wMax: 1
-        hMin: 0.0
+        hMin: 0.01
         hMax: 0.1
         dMin: 0.1
         dMax: 1.5
@@ -53,6 +53,14 @@ object_detection:
         vmin: 0
         vmax: 255
     hsv5:
+        color: red
+        hmin: 0
+        hmax: 8
+        smin: 134
+        smax: 255
+        vmin: 0
+        vmax: 255
+    hsv6:
         color: orange
         hmin: 0
         hmax: 49
