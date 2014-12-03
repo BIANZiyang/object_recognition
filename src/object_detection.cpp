@@ -49,7 +49,9 @@ public:
         loadParams();
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
-        img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+
+        //img_sub_ = it_.subscribe("/camera/rgb/image_rect_color", 1, &object_detection::imageCB, this);
+
         imgPosition_pub_ = nh_.advertise<robot_msgs::imagePosition>("/object_detection/object_position",1);
         img_pub_ = it_.advertise("/object_detection/object",1);
 
@@ -104,12 +106,21 @@ public:
         }
         pcl_ros::transformPointCloud(*currentCloudPtr_, *currentCloudPtr_, transform);
         currentCloudPtr_->header.frame_id = "robot_center";
-        havePcl_ = true;
-
-#ifdef DCB
         sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
-        pcl_tf_pub_.publish(msgOut);
+
+        //Getting Image from the Cloud
+        sensor_msgs::Image tempImageMsg;
+        pcl::toROSMsg(msgOut,tempImageMsg);
+        currentImagePtr_= cv_bridge::toCvCopy(tempImageMsg, "bgr8");
+        haveImage_=true;
+
+        havePcl_ = true;
+
+
+#ifdef DCB
+
+            pcl_tf_pub_.publish(msgOut);
 #endif
 
     }
@@ -119,7 +130,6 @@ public:
             DEBUG(std::cout << "No PCL or image set" << std::endl;)
             return;
         }
-
         std::vector<int> indices;
         cropDepthData(indices);
         //DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
