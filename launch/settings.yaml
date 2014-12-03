@@ -6,10 +6,10 @@ object_detection:
     crop:
         wMin: -1
         wMax: 1
-        hMin: 0.01
+        hMin: 0.0
         hMax: 0.1
         dMin: 0.1
-        dMax: 0.5
+        dMax: 1.5
     voxel:
         leafsize: 0.005
     hsv0:

@@ -61,9 +61,9 @@ public:
             lastHsvRange_ = -1;
             cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
-            cv::namedWindow("Input image", CV_WINDOW_AUTOSIZE);
+            cv::namedWindow("Blurred image", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Combined filter", CV_WINDOW_AUTOSIZE);
-            setupHsvTrackbars();
+//            setupHsvTrackbars();
             uiThread = boost::thread(&object_detection::asyncImshow, this);
 #endif
     }
@@ -89,8 +89,6 @@ public:
         rows_ = cvPtr->image.rows;
         cols_ = cvPtr->image.cols;
         haveImage_ = true;
-
-        DEBUG(cv::imshow("Input image", currentImagePtr_->image);)
     }
 
     void pointCloudCB(const sensor_msgs::PointCloud2ConstPtr& pclMsg) {
@@ -109,9 +107,9 @@ public:
         havePcl_ = true;
 
 #ifdef DCB
-            sensor_msgs::PointCloud2 msgOut;
-            pcl::toROSMsg(*currentCloudPtr_, msgOut);
-            pcl_tf_pub_.publish(msgOut);
+        sensor_msgs::PointCloud2 msgOut;
+        pcl::toROSMsg(*currentCloudPtr_, msgOut);
+        pcl_tf_pub_.publish(msgOut);
 #endif
 
     }
@@ -130,54 +128,58 @@ public:
             depthMask.at<char>(indices[i]) = 255;
         }
 
-        DEBUG(cv::imshow("Depth filter", depthMask);)
-        //DEBUG(std::cout<< "Created the DepthMask " << std::endl;)
         cv::Mat HSVmask;
+        cv::Mat blurredImage;
         cv::Mat combinedMask;
-        cv::medianBlur(currentImagePtr_->image, HSVmask, 9);
+        cv::medianBlur(currentImagePtr_->image, blurredImage, 15);
+
+#ifdef DCB
+       // cv::imshow("Depth filter", depthMask);
+        cv::imshow("Blurred image", blurredImage);
+        cv::Mat savedHSVMask;
+        cv::Mat saveCombinedMask;
+#endif
+        cv::cvtColor(blurredImage, blurredImage, CV_BGR2HSV);
+
         double largestArea = 0;
         std::string largestAreaColor = "";
         std::vector<cv::Point> largestContour;
-        //DEBUG(std::cout<< " Looping through " << hsvRanges_.size()<< " Hsv Colors" << std::endl;)
+        cv::Mat contourMask;
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
-            cv::cvtColor(currentImagePtr_->image, HSVmask, CV_BGR2HSV);
-            cv::inRange(HSVmask, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
+            cv::inRange(blurredImage, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
             combinedMask = depthMask & HSVmask;
-            //DEBUG(std::cout<< "created Mask with depth and HSV of color :   "<< hsvRanges_[i].color << std::endl;)
-
-#ifdef DCB
-            if(i == selectedHsvRange_) {
-                cv::imshow("HSV filter", HSVmask);
-            }
-#endif
-
-            cv::medianBlur(combinedMask, combinedMask, 3);
             std::vector<std::vector<cv::Point> > contours;
             std::vector<cv::Vec4i> notUsedHierarchy;
-            cv::findContours(combinedMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
-            //DEBUG(std::cout<< " Found Contours  "<< contours.size() << std::endl;)
+
+            contourMask = combinedMask.clone();
+            cv::findContours(contourMask, contours, notUsedHierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
             if(contours.size() > 0) {
                 for(size_t j = 0; j < contours.size(); ++j) {
-                    //DEBUG(std::cout<< "Determining size of the inside area " << std::endl;)
                     double area = cv::contourArea(contours[j]);
-                     //DEBUG(std::cout<< "Following area was detected :   "<< area << std::endl;)
                     if(area > areaMinThreshold_ && area > largestArea && area < areaMaxThreshold_ ) {
-                        //DEBUG(std::cout<< " Trying to overwrite largest Area" << std::endl;)
                         largestArea = area;
                         largestAreaColor = hsvRanges_[i].color;
                         largestContour = contours[j];
-                        //DEBUG(std::cout<< "new largest Area found, following size :  "<< area << std::endl;)
+#ifdef DCB
+                        savedHSVMask = HSVmask.clone();
+                        saveCombinedMask = combinedMask.clone();
+#endif
 
                     }
                 }
-
             }
-
         }
+
         if(largestContour.size() == 0) {
             return;
         }
+
+#ifdef DCB
+        //cv::imshow("HSV filter", savedHSVMask);
+        cv::imshow("Combined filter", saveCombinedMask);
+        std::cout << "Color filter used: " << largestAreaColor << std::endl;
+#endif
 
         //Getting the Position of the largest Contour
         Cloud objectCloud;
@@ -192,17 +194,17 @@ public:
                 point.y=y;
 
 
-                if(0 < cv::pointPolygonTest(largestContour,point,false)){
+                if(0 <= cv::pointPolygonTest(largestContour,point,false)){
                     //contourMask.at<char>(x,y)=255;
                     objectCloud.points.push_back(currentCloudPtr_->at(x,y));
 
-                    DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
+//                    DEBUG(std::cout<< "Pointclouddata:  "<< currentCloudPtr_->at(x,y) << std::endl;)
                     debug++;
                 }
             }
         }
 
-        DEBUG(std::cout<< "Got Pointcloud with " << objectCloud.points.size() << "  Points, it had : "<< rows_ << " rows and "<< cols_ << " Columms " << std::endl;)
+        DEBUG(std::cout<< "Got Pointcloud with " << objectCloud.points.size() << "  Points " << std::endl;)
         Eigen::Vector4f massCenter;
         std::vector<int> indicies;
         Cloud withoutNan;
@@ -213,7 +215,7 @@ public:
 
 
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
-        DEBUG(std::cout << "Area: " << largestArea << std::endl;)
+//        DEBUG(std::cout << "Area: " << largestArea << std::endl;)
 
         cv::Rect objRect = cv::boundingRect(largestContour);
         objRect.x = std::max(0, objRect.x - rectPadding_);
@@ -223,9 +225,8 @@ public:
 
 
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
-        DEBUG(cv::imshow("Combined filter", objImgOut);)
 
-        DEBUG(std::cout<< " Try  to send msg" << std::endl;)
+//        DEBUG(std::cout<< " Try  to send msg" << std::endl;)
         //Sending the msg:
 
         geometry_msgs::Point dir_msg_out;
@@ -244,7 +245,7 @@ public:
         msgOut.image = imgOut.operator *();
         imgPosition_pub_.publish(msgOut);
         img_pub_.publish(imgOut);
-        DEBUG(std::cout<< "Sending Completed " << std::endl;)
+//        DEBUG(std::cout<< "Sending Completed " << std::endl;)
     }
 
 
@@ -294,12 +295,12 @@ private:
         double& vmax;
     };
 
-    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = true) {
+    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid = false) {
         for(int index = 0; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
-            if((includeInvalid && ( pcl_isnan(cp.x) ||
-                                    pcl_isnan(cp.y) ||
-                                    pcl_isnan(cp.z))) ||
+            if(includeInvalid && isnan(cp.x)) {
+                outIndices.push_back(index);
+            } else if(
                     cp.y >= cbMin_[1] &&
                     cp.y <= cbMax_[1] &&
                     cp.x >= cbMin_[0] &&
@@ -364,11 +365,11 @@ private:
 #ifdef DCB
         //Separate thread to update the UI when debugging
         void asyncImshow() {
-            ros::Rate rate(1);
+            ros::Rate rate(2);
             while(1) {
                 try {
                     boost::this_thread::interruption_point();
-                    updateHsvTrackbars();
+//                    updateHsvTrackbars();
                     cv::waitKey(1);
                     rate.sleep();
                 } catch(boost::thread_interrupted&){
