@@ -116,7 +116,7 @@ public:
         pcl::toROSMsg(msgOut,tempImageMsg);
         currentImagePtr_= cv_bridge::toCvCopy(tempImageMsg, "bgr8");
         haveImage_=true;
-
+        currentheader_ = pclMsg->header;
         havePcl_ = true;
 
 
@@ -246,8 +246,9 @@ public:
         img.image = objImgOut;
         sensor_msgs::ImagePtr imgOut = img.toImageMsg();
         imgOut->encoding = "bgr8";
-
         robot_msgs::imagePosition msgOut;
+
+        msgOut.header = currentheader_;
         msgOut.color=largestAreaColor;
         msgOut.point=dir_msg_out;
         msgOut.image = imgOut.operator *();
@@ -430,7 +431,7 @@ private:
     ros::Publisher imgPosition_pub_;
     bool haveImage_;
     bool havePcl_;
-
+    std_msgs::Header currentheader_;
     double voxelsize_;
     double areaMinThreshold_ , areaMaxThreshold_;
     int rectPadding_;
