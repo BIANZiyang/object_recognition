@@ -40,6 +40,9 @@ public:
         std::fill_n(lastobjects,2,0);
         std::fill_n(Point,3,0);
     }
+
+
+// ########################## Callbacks #############################
     void imgFileCB(const std_msgs::String& pathToImg) {
         D(cout << "Classifying " << pathToImg.data << endl;)
         cv::Mat inputImg = cv::imread(pathToImg.data);
@@ -90,15 +93,7 @@ public:
         classification(cv_ptr->image);
 
 }
-
-    void trainPCA(cv::Mat& rowImg, cv::Mat& result){
-        std::cout << " Rows before PCA " << rowImg.cols << std::endl;
-        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
-        pca.project(rowImg,result);
-
-        std::cout << " Rows after PCA " << result.cols << std::endl;
-
-    }
+ // ########################### Classification ##############################
     void classification(cv::Mat inputImg){
         cv::Mat showimage;
         cv::resize(inputImg,showimage,cv::Size(200,200));
@@ -207,6 +202,21 @@ public:
 //        }
 
     }
+
+
+
+
+ //############################## Train functions ####################################
+
+    void trainPCA(cv::Mat& rowImg, cv::Mat& result){
+        std::cout << " Rows before PCA " << rowImg.cols << std::endl;
+        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
+        pca.project(rowImg,result);
+
+        std::cout << " Rows after PCA " << result.cols << std::endl;
+
+    }
+
     void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
         bc.train(traindata,responses);
     }
@@ -266,7 +276,7 @@ public:
 
         return objects;
     }
-
+// ############################### Help Functions ##############################
     cv::Mat matToFloatRow(const cv::Mat& input) {
         cv::Mat res(1, input.rows*input.cols*attributes, CV_32FC1);
         int rows = input.rows;
