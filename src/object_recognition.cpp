@@ -86,6 +86,7 @@ public:
         Point[1]=img_msg.point.y;
         Point[2]=img_msg.point.z;
         //cout<< "loaded pointer"<< endl;
+        currentheader_= img_msg.header;
         classification(cv_ptr->image);
 
 }
@@ -175,6 +176,7 @@ public:
                 detection_msgs.position.y= Point[1];
                 detection_msgs.position.z= Point[2];
                 detection_msgs.object_id = result;
+                detection_msgs.header = currentheader_;
                 objectposition_pub.publish(detection_msgs);
                 // Publishing Evidence
                 ras_msgs::RAS_Evidence evidence_msg;
@@ -309,6 +311,7 @@ private:
     image_transport::ImageTransport _it;
     image_transport::Subscriber img_sub;
     ros::Time lastobject;
+    std_msgs::Header currentheader_;
 };
 
 
