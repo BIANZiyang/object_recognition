@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define USE_DEBUG
+#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -45,7 +45,7 @@ public:
     object_detection() :
         it_(nh_)
     {
-        hsvRanges_.resize(7);
+        hsvRanges_.resize(6);
         loadParams();
 
         pcl_sub_ = nh_.subscribe("/camera/depth_registered/points", 1, &object_detection::pointCloudCB, this);
@@ -62,6 +62,7 @@ public:
             selectedHsvRange_ = 0;
             lastHsvRange_ = -1;
             cv::namedWindow("HSV filter", CV_WINDOW_AUTOSIZE);
+            cv::namedWindow("Flood mask", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Depth filter", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Blurred image", CV_WINDOW_AUTOSIZE);
             cv::namedWindow("Combined filter", CV_WINDOW_AUTOSIZE);
@@ -134,7 +135,6 @@ public:
 
         std::vector<int> indices;
         cropDepthData(indices);
-        DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
         cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
         for(size_t i = 0; i < indices.size(); ++i) {
             depthMask.at<char>(indices[i]) = 255;
@@ -143,7 +143,7 @@ public:
         cv::Mat HSVmask;
         cv::Mat blurredImage;
         cv::Mat combinedMask;
-        cv::medianBlur(currentImagePtr_->image, blurredImage, 15);
+        cv::medianBlur(currentImagePtr_->image, blurredImage, 9);
 
 #ifdef DCB
         cv::imshow("Depth filter", depthMask);
@@ -154,21 +154,22 @@ public:
         cv::cvtColor(blurredImage, blurredImage, CV_BGR2HSV);
 
         double largestArea = 0;
+        int largestIndex = 0;
         std::string largestAreaColor = "";
         std::vector<cv::Point> largestContour;
         cv::Mat contourMask;
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             cv::inRange(blurredImage, hsvRanges_[i].min, hsvRanges_[i].max, HSVmask);
 
-            /*
+#ifdef DCB
+            if(i == selectedHsvRange_) {
+                cv::imshow("HSV filter", HSVmask);
+            }
+#endif
 
             if(hsvRanges_[i].inverted) {
                 cv::bitwise_not(HSVmask, HSVmask);
             }
-
-            if(hsvRanges_[i].color == "red") {
-                cv::imshow("HSV filter", HSVmask);
-            }*/
 
             combinedMask = HSVmask & depthMask;
             std::vector<std::vector<cv::Point> > contours;
@@ -183,6 +184,7 @@ public:
                         largestArea = area;
                         largestAreaColor = hsvRanges_[i].color;
                         largestContour = contours[j];
+                        largestIndex = i;
 #ifdef DCB
                         savedHSVMask = HSVmask.clone();
                         saveCombinedMask = combinedMask.clone();
@@ -235,21 +237,29 @@ public:
         DEBUG(std::cout<< "Got Pointcloud with "<< withoutNan.points.size()  << "  Points after removing NaN" << std::endl;)
         pcl::compute3DCentroid(objectCloud, massCenter);
 
-
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
-//        DEBUG(std::cout << "Area: " << largestArea << std::endl;)
 
         cv::Rect objRect = cv::boundingRect(largestContour);
+        cv::Point objCenter(objRect.x + objRect.width/2, objRect.y + objRect.height/2);
+        cv::Mat floodMask = cv::Mat::zeros(rows_+2, cols_+2, CV_8UC1);
+        hsvRange& cr = hsvRanges_[largestIndex];
+        cv::Scalar upDiff(cr.updiffh, cr.updiffs, cr.updiffv);
+        cv::Scalar lowDiff(cr.lowdiffh, cr.lowdiffs, cr.lowdiffv);
+//        cv::Scalar upDiff(updiffh_, updiffs_, updiffv_);
+//        cv::Scalar lowDiff(lowdiffh_, lowdiffs_, lowdiffv_);
+        cv::floodFill(blurredImage, floodMask, objCenter, cv::Scalar(0, 0, 0), NULL, lowDiff, upDiff, 8 | CV_FLOODFILL_FIXED_RANGE | CV_FLOODFILL_MASK_ONLY | 255 << 8);
+        cv::medianBlur(floodMask, floodMask, 3);
+        cv::circle(floodMask, objCenter, 3, cv::Scalar(128, 0, 0), 2);
+
+#ifdef DCB
+        cv::imshow("Flood mask", floodMask);
+#endif
+
         objRect.x = std::max(0, objRect.x - rectPadding_);
         objRect.y = std::max(0, objRect.y - rectPadding_);
         objRect.height = std::min(rows_ - objRect.y, objRect.height + 2*rectPadding_ + heightCorrection_);
         objRect.width = std::min(cols_ - objRect.x, objRect.width + 2*rectPadding_);
-
-
         cv::Mat objImgOut = currentImagePtr_->image(objRect);
-
-//        DEBUG(std::cout<< " Try  to send msg" << std::endl;)
-        //Sending the msg:
 
         geometry_msgs::Point dir_msg_out;
         dir_msg_out.x = massCenter[0];
@@ -308,6 +318,7 @@ private:
 
         cv::Scalar min;
         cv::Scalar max;
+
         bool inverted;
         double& hmin;
         double& smin;
@@ -315,10 +326,12 @@ private:
         double& hmax;
         double& smax;
         double& vmax;
+        double updiffh, updiffs, updiffv;
+        double lowdiffh, lowdiffs, lowdiffv;
     };
 
-    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid =false) {
-        for(int index = 0; index < rows_*cols_; ++index) {
+    void cropDepthData(std::vector<int>& outIndices, bool includeInvalid =true) {
+        for(int index = 150*cols_; index < rows_*cols_; ++index) {
             Point& cp = currentCloudPtr_->at(index);
             if(includeInvalid && isnan(cp.x)) {
                 outIndices.push_back(index);
@@ -349,6 +362,7 @@ private:
         getParam("object_detection/minArea", areaMinThreshold_, 1000);
         getParam("object_detection/maxArea", areaMaxThreshold_, 6000);
 
+
         std::string hsvParamName("object_detection/hsv");
         for(size_t i = 0; i < hsvRanges_.size(); ++i) {
             std::stringstream ss; ss << hsvParamName << i;
@@ -358,6 +372,15 @@ private:
             getParam(ss.str() + "/hmax", hsvRanges_[i].hmax, 180);
             getParam(ss.str() + "/smax", hsvRanges_[i].smax, 255);
             getParam(ss.str() + "/vmax", hsvRanges_[i].vmax, 255);
+
+            getParam(ss.str() + "/updiffh", hsvRanges_[i].updiffh, 0);
+            getParam(ss.str() + "/updiffs", hsvRanges_[i].updiffs, 0);
+            getParam(ss.str() + "/updiffv", hsvRanges_[i].updiffv, 0);
+
+            getParam(ss.str() + "/lowdiffh", hsvRanges_[i].lowdiffh, 0);
+            getParam(ss.str() + "/lowdiffs", hsvRanges_[i].lowdiffs, 0);
+            getParam(ss.str() + "/lowdiffv", hsvRanges_[i].lowdiffv, 0);
+
             getParam(ss.str() + "/color", hsvRanges_[i].color, "");
             getParam(ss.str() + "/inverted", hsvRanges_[i].inverted, false);
         }
@@ -411,6 +434,13 @@ private:
             cv::createTrackbar("Smax", "HSVTrackbars", NULL, 255);
             cv::createTrackbar("Vmin", "HSVTrackbars", NULL, 255);
             cv::createTrackbar("Vmax", "HSVTrackbars", NULL, 255);
+
+            cv::createTrackbar("updiffh", "HSVTrackbars", NULL, 25500);
+            cv::createTrackbar("updiffs", "HSVTrackbars", NULL, 25500);
+            cv::createTrackbar("updiffv", "HSVTrackbars", NULL, 25500);
+            cv::createTrackbar("lowdiffh", "HSVTrackbars", NULL, 25500);
+            cv::createTrackbar("lowdiffs", "HSVTrackbars", NULL, 25500);
+            cv::createTrackbar("lowdiffv", "HSVTrackbars", NULL, 25500);
         }
 
         //Read values from trackbars when debugging
@@ -432,6 +462,13 @@ private:
             hsvRanges_[selectedHsvRange_].smax = cv::getTrackbarPos("Smax", "HSVTrackbars");
             hsvRanges_[selectedHsvRange_].vmin = cv::getTrackbarPos("Vmin", "HSVTrackbars");
             hsvRanges_[selectedHsvRange_].vmax = cv::getTrackbarPos("Vmax", "HSVTrackbars");
+
+            updiffh_ = cv::getTrackbarPos("updiffh", "HSVTrackbars")/100.0;
+            updiffs_ = cv::getTrackbarPos("updiffs", "HSVTrackbars")/100.0;
+            updiffv_ = cv::getTrackbarPos("updiffv", "HSVTrackbars")/100.0;
+            lowdiffh_ = cv::getTrackbarPos("lowdiffh", "HSVTrackbars")/100.0;
+            lowdiffs_ = cv::getTrackbarPos("lowdiffs", "HSVTrackbars")/100.0;
+            lowdiffv_ = cv::getTrackbarPos("lowdiffv", "HSVTrackbars")/100.0;
         }
 #endif
 
@@ -448,6 +485,7 @@ private:
 
     double voxelsize_;
     double areaMinThreshold_ , areaMaxThreshold_;
+    double updiffh_, updiffs_, updiffv_, lowdiffh_, lowdiffs_, lowdiffv_;
     int rectPadding_;
     int rows_, cols_;
     int selectedHsvRange_;

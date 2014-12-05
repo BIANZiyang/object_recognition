@@ -20,6 +20,12 @@ object_detection:
         smax: 136
         vmin: 121
         vmax: 220
+        updiffh: 0
+        updiffs: 0
+        updiffv: 0
+        lowdiffh: 0
+        lowdiffs: 0
+        lowdiffv: 0
     hsv1:
         color: blue
         hmin: 60
@@ -28,6 +34,12 @@ object_detection:
         smax: 255
         vmin: 0
         vmax: 255
+        updiffh: 87.89
+        updiffs: 88.39
+        updiffv: 84.82
+        lowdiffh: 71.76
+        lowdiffs: 88.94
+        lowdiffv: 57.14
     hsv2:
         color: green
         hmin: 24
@@ -36,6 +48,12 @@ object_detection:
         smax: 255
         vmin: 48
         vmax: 255
+        updiffh: 234.4
+        updiffs: 193.5
+        updiffv: 197.8
+        lowdiffh: 107.4
+        lowdiffs: 63.5
+        lowdiffv: 82.3
     hsv3:
         color: yellow
         hmin: 12
@@ -44,28 +62,38 @@ object_detection:
         smax: 255
         vmin: 151
         vmax: 255
+        updiffh: 172.6
+        updiffs: 129.8
+        updiffv: 94.5
+        lowdiffh: 105.1
+        lowdiffs: 25.8
+        lowdiffv: 212.7
     hsv4:
         color: red
-        hmin: 159
+        hmin: 150
         hmax: 180
-        smin: 134
+        smin: 118
         smax: 255
         vmin: 0
         vmax: 255
+        updiffh: 180
+        updiffs: 152.5
+        updiffv: 138.9
+        lowdiffh: 192.4
+        lowdiffs: 51.7
+        lowdiffv: 124.5
     hsv5:
-        color: red
-        hmin: 0
-        hmax: 8
-        smin: 134
-        smax: 255
-        vmin: 0
-        vmax: 255
-    hsv6:
         color: orange
         hmin: 0
-        hmax: 49
+        hmax: 55
         smin: 157
         smax: 255
         vmin: 161
         vmax: 255
+        updiffh: 0
+        updiffs: 0
+        updiffv: 0
+        lowdiffh: 0
+        lowdiffs: 0
+        lowdiffv: 0
 
