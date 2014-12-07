@@ -190,16 +190,16 @@ public:
                 lastobjects[0]=resultid;
             }
         }
-//        else if(time.sec-lastobject.sec >5 ){
-//            ras_msgs::RAS_Evidence msg;
-//            msg.stamp =ros::Time::now();
-//            msg.object_id = "Object";
-//            msg.group_number = 3;
-//            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-//            evidence_pub.publish(msg);
-//            speakresult("Object");
-//            lastobject = time;
-//        }
+        /*else if(time.sec-lastobject.sec >5 ){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = "Object";
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult("Object");
+            lastobject = time;
+        }*/
 
     }
 
