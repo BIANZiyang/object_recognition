@@ -17,7 +17,11 @@
 #include <ras_msgs/RAS_Evidence.h>
 #include <robot_msgs/imagePosition.h>
 #include <robot_msgs/detectedObject.h>
+#include <robot_msgs/recognitionActionAction.h>
+
 #include <image_transport/image_transport.h>
+
+#include <actionlib/server/simple_action_server.h>
 using std::cout;
 using std::endl;
 
@@ -26,7 +30,8 @@ using std::endl;
 class object_recognition {
 public:
     object_recognition() :
-        _it(nh){
+        _it(nh),
+      server(nh, "waitForRec", false){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         //img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
@@ -39,10 +44,28 @@ public:
         std::fill_n(alreadyseen,10,0);
         std::fill_n(lastobjects,2,0);
         std::fill_n(Point,3,0);
+        working=false;
+        train_knn();
+        server.registerGoalCallback(boost::bind(&object_recognition::goworking, this));
+        server.registerPreemptCallback(boost::bind(&object_recognition::stopworking, this));
+        server.start();
     }
 
 
 // ########################## Callbacks #############################
+    void goworking(){
+        working=true;
+        server.acceptNewGoal();
+        //ros::Rate rate(1);
+
+        std::fill_n(lastobjects,2,0);
+        //server.setSucceeded();
+    }
+    void stopworking(){
+        working=false;
+        server.setPreempted();
+    }
+
     void imgFileCB(const std_msgs::String& pathToImg) {
         D(cout << "Classifying " << pathToImg.data << endl;)
         cv::Mat inputImg = cv::imread(pathToImg.data);
@@ -67,8 +90,9 @@ public:
             return;
         }
         //cout<< "loaded pointer"<< endl;
+        if(working){
         classification(cv_ptr->image);
-
+        }
     }
 // For Images with Poistion:
     void recognitionCBpos(const robot_msgs::imagePosition& img_msg){
@@ -90,8 +114,9 @@ public:
         Point[2]=img_msg.point.z;
         //cout<< "loaded pointer"<< endl;
         currentheader_= img_msg.header;
-        classification(cv_ptr->image);
-
+        if(working){
+            classification(cv_ptr->image);
+        }
 }
  // ########################### Classification ##############################
     void classification(cv::Mat inputImg){
@@ -162,7 +187,7 @@ public:
             return;
         }
         if(0!=result.compare(("background")) && result.size()>0){
-            if(lastobjects[0]==resultid && lastobjects[1]==resultid || true){
+            if(lastobjects[0]==resultid && lastobjects[1]==resultid){
                 alreadyseen[resultid]++;
                 // Publishing Msg:
                 D(std::cout << "Detected an " << result << std::endl;)
@@ -183,6 +208,8 @@ public:
                 evidence_pub.publish(evidence_msg);
                 speakresult(result);
                 lastobject = time;
+                working=false;
+                server.setSucceeded();
 
                 }
             else{
@@ -322,13 +349,14 @@ private:
     image_transport::Subscriber img_sub;
     ros::Time lastobject;
     std_msgs::Header currentheader_;
+    bool working;
+    actionlib::SimpleActionServer<robot_msgs::recognitionActionAction> server;
 };
 
 
 int main(int argc, char** argv){
     ros::init(argc, argv, "object_recognition");
     object_recognition object_rec;
-    object_rec.train_knn();
     ros::Rate rate(1);
     while(ros::ok()){
         ros::spinOnce();
