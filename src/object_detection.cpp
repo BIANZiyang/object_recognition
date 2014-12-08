@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define USE_DEBUG
+#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -269,7 +269,7 @@ public:
         msgOut.image = imgOut.operator *();
         imgPosition_pub_.publish(msgOut);
         img_pub_.publish(imgOut);
-//        DEBUG(std::cout<< "Sending Completed " << std::endl;)
+        DEBUG(std::cout<< "Sending Completed " << std::endl;)
     }
 
 

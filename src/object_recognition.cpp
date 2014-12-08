@@ -31,7 +31,7 @@ class object_recognition {
 public:
     object_recognition() :
         _it(nh),
-      server(nh, "waitForRec", false){
+      server(nh, "object_recognition", false){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         //img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
@@ -55,6 +55,7 @@ public:
 // ########################## Callbacks #############################
     void goworking(){
         working=true;
+	std::cout << "Got the comand to start working from main node " << std::endl;
         server.acceptNewGoal();
         //ros::Rate rate(1);
 
@@ -145,7 +146,8 @@ public:
         cv::Mat neighborsclasses;
         cv::Mat neighborsdistant;
         kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
-        float resbayes = bc.predict(pcaRowImg);
+        //float resbayes = bc.predict(pcaRowImg);
+        float resbayes=0;
         int sureness=0;
         for(int i=0;i<neighborcount;i++){
             if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
@@ -173,16 +175,17 @@ public:
             result = resultkn;
             D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
         }
-        else if(matchingcolorbayes >=0){
-            result = resultbayes;
-            resultid=resbayes;
-            D(std::cout << "Color and Bayes Agreed" << std::endl;)
-        }
         else if(matchingcolorkn >=0){
             result = resultkn;
             D(std::cout << "Color and KNN Agreed" << std::endl;)
         }
-        else{
+
+//        else if(matchingcolorbayes >=0){
+//            result = resultbayes;
+//            resultid=resbayes;
+//            D(std::cout << "Color and Bayes Agreed" << std::endl;)
+//        }
+else{
             D(std::cout << "All 3 Classifier different " << std::endl;)
             return;
         }
@@ -269,7 +272,7 @@ public:
         kc.train(pcatrainData, responses);
 
         //BayesClassifier:
-        train_BayesClassifier(pcatrainData,responses);
+        //train_BayesClassifier(pcatrainData,responses);
 
         D(std::cout<< "Training succeded"<< std::endl;)
     }
