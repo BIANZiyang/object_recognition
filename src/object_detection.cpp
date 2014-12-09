@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-//#define USE_DEBUG
+#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -99,7 +99,7 @@ public:
         pcl::fromROSMsg(*pclMsg, *currentCloudPtr_);
         tf::StampedTransform transform;
         try {
-            tf_sub_.lookupTransform("/camera_rgb_optical_frame", "robot_center", ros::Time(0), transform);
+            tf_sub_.lookupTransform("robot_center", "camera_rgb_optical_frame", ros::Time(0), transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s",ex.what());
             return;
@@ -122,7 +122,7 @@ public:
 #ifdef DCB
         //sensor_msgs::PointCloud2 msgOut;
         pcl::toROSMsg(*currentCloudPtr_, msgOut);
-        pcl_tf_pub_.publish(msgOut);
+        pcl_tf_pub_.publish(pclMsg);
 #endif
 
     }
@@ -134,7 +134,7 @@ public:
         }
 
         std::vector<int> indices;
-        cropDepthData(indices);
+        cropDepthData(indices, false);
         DEBUG(std::cout<< " Croped the DepthData" << std::endl;)
         cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
         for(size_t i = 0; i < indices.size(); ++i) {
@@ -148,7 +148,7 @@ public:
 
 #ifdef DCB
         cv::imshow("Depth filter", depthMask);
-        cv::imshow("Blurred image", blurredImage);
+       // cv::imshow("Blurred image", blurredImage);
         cv::Mat savedHSVMask;
         cv::Mat saveCombinedMask;
 #endif
@@ -269,7 +269,7 @@ public:
         msgOut.image = imgOut.operator *();
         imgPosition_pub_.publish(msgOut);
         img_pub_.publish(imgOut);
-//        DEBUG(std::cout<< "Sending Completed " << std::endl;)
+        DEBUG(std::cout<< "Sending Completed " << std::endl;)
     }
 
 
