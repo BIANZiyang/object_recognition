@@ -185,13 +185,14 @@ public:
 ////            resultid=resbayes;
 ////            D(std::cout << "Color and Bayes Agreed" << std::endl;)
 ////        }
-else{
+        else{
             //D(std::cout << "All 2 Classifier different " << std::endl;)
-            return;
+            result = "Object";
+            resultid=-1;
         }
         if(0!=result.compare(("background")) && result.size()>0){
             if(lastobjects[0]==resultid && lastobjects[1]==resultid){
-                alreadyseen[resultid]++;
+                if(resultid!=-1) alreadyseen[resultid]++;
                 // Publishing Msg:
                 D(std::cout << "Detected an " << result << std::endl;)
                 robot_msgs::detectedObject detection_msgs;

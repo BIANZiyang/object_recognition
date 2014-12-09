@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-#define USE_DEBUG
+//#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -240,6 +240,22 @@ public:
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
 //        DEBUG(std::cout << "Area: " << largestArea << std::endl;)
 
+
+       // -------------------------- Trying to see if the area of an circle or box around the contour is smaller --
+        cv::Point2f centermincircle;
+        float radiusmincircle;
+        cv::minEnclosingCircle(cv::Mat(largestContour), centermincircle , radiusmincircle);
+        double areamincircle= pow(radiusmincircle,2) * 3.141592653;
+
+        cv::RotatedRect minimumrect = cv::minAreaRect(cv::Mat(largestContour));
+        double areaminrectangle = minimumrect.size.area();
+        if(areamincircle>areaminrectangle){
+            std::cout << " It is probably A CIRCLE !!!!! " << std::endl;
+
+        }
+        else{
+             std::cout << " It is probably A RECTANGLE !!!!! " << std::endl;
+        }
         cv::Rect objRect = cv::boundingRect(largestContour);
         objRect.x = std::max(0, objRect.x - rectPadding_);
         objRect.y = std::max(0, objRect.y - rectPadding_);
