@@ -147,46 +147,46 @@ public:
         cv::Mat neighborsdistant;
         kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
         //float resbayes = bc.predict(pcaRowImg);
-        float resbayes=0;
+
         int sureness=0;
         for(int i=0;i<neighborcount;i++){
             if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
                 sureness++;
             }
         }
-        D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
-        D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<<" Given color: "<< color << endl;)
+        //D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
+        //D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "  <<" Given color: "<< color << endl;)
         int resultid = res.at<float>(0);
         std::string result;
-        std::string resultbayes = intToDesc[resbayes];
+        //std::string resultbayes = intToDesc[resbayes];
         std::string resultkn =intToDesc[resultid];
         ros::Time time = ros::Time::now();
         int matchingcolorkn = resultkn.find(color);
-        int matchingcolorbayes = resultbayes.find(color);
-        if(resultid== resbayes && matchingcolorkn >=0){
+        //int matchingcolorbayes = resultbayes.find(color);
+        if(matchingcolorkn >=0){
             result= resultkn;
-            D(std::cout << "All 3 have agreed" << std::endl;)
+            //D(std::cout << "All 2 have agreed" << std::endl;)
         }
-        else if(resultid == resbayes){
-            result= resultkn;
-            D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
-        }
-        else if(matchingcolorbayes >=0 && matchingcolorkn >=0 ){
-            result = resultkn;
-            D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
-        }
-        else if(matchingcolorkn >=0){
-            result = resultkn;
-            D(std::cout << "Color and KNN Agreed" << std::endl;)
-        }
-
-//        else if(matchingcolorbayes >=0){
-//            result = resultbayes;
-//            resultid=resbayes;
-//            D(std::cout << "Color and Bayes Agreed" << std::endl;)
+//        else if(resultid == resbayes){
+//            result= resultkn;
+//            D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
 //        }
+//        else if(matchingcolorbayes >=0 && matchingcolorkn >=0 ){
+//            result = resultkn;
+//            D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
+//        }
+//        else if(matchingcolorkn >=0){
+//            result = resultkn;
+//            D(std::cout << "Color and KNN Agreed" << std::endl;)
+//        }
+
+////        else if(matchingcolorbayes >=0){
+////            result = resultbayes;
+////            resultid=resbayes;
+////            D(std::cout << "Color and Bayes Agreed" << std::endl;)
+////        }
 else{
-            D(std::cout << "All 3 Classifier different " << std::endl;)
+            //D(std::cout << "All 2 Classifier different " << std::endl;)
             return;
         }
         if(0!=result.compare(("background")) && result.size()>0){
@@ -239,12 +239,39 @@ else{
  //############################## Train functions ####################################
 
     void trainPCA(cv::Mat& rowImg, cv::Mat& result){
-        std::cout << " Rows before PCA " << rowImg.cols << std::endl;
-        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
-        pca.project(rowImg,result);
+        if(load){
+            cv::FileStorage fs1("/home/ras/catkin_ws/src/object_recognition/launch/pca.yml", cv::FileStorage::READ);
+            cv::Mat loadeigenvectors, loadeigenvalues , loadedmean;
+            fs1["Eigenvalues"] >> loadeigenvalues;
+            fs1["Eigenvector"] >> loadeigenvectors;
+            fs1["Mean"] >> loadedmean;
+            fs1.release();
+            pca.mean=loadedmean.clone();
+            pca.eigenvalues= loadeigenvalues.clone();
+            pca.eigenvectors=loadeigenvectors.clone();
+            pca.project(rowImg,result);
+            std::cout << "Loaded succesfull! Cols left : " << result.cols << std::endl;
+        }
+        else{
+            std::cout << " Rows before PCA " << rowImg.cols << std::endl;
+            pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
+            pca.project(rowImg,result);
 
-        std::cout << " Rows after PCA " << result.cols << std::endl;
+            std::cout << " Rows after PCA " << result.cols << std::endl;
+            if(save){
+                cv::FileStorage fs("/home/ras/catkin_ws/src/object_recognition/launch/pca.yml", cv::FileStorage::WRITE);
 
+                cv::Mat eigenval,eigenvec,mean;
+                mean=pca.mean.clone();
+                eigenval=pca.eigenvalues.clone();
+                eigenvec=pca.eigenvectors.clone();
+                fs << "Eigenvalues" << eigenval;
+                fs << "Eigenvector" << eigenvec;
+                fs << "Mean" << mean;
+                fs.release();
+
+            }
+        }
     }
 
     void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
@@ -344,6 +371,8 @@ private:
     static const int sample_size_y = 100;
     static const int attributes = 1;
     static const float pcaaccuracy = 0.999;
+    static const bool save= true;
+    static const bool load= false;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
