@@ -249,12 +249,12 @@ public:
 
         cv::RotatedRect minimumrect = cv::minAreaRect(cv::Mat(largestContour));
         double areaminrectangle = minimumrect.size.area();
-        if(areamincircle>areaminrectangle){
-            std::cout << " It is probably A CIRCLE !!!!! " << std::endl;
+        if(areamincircle<areaminrectangle){
+            std::cout << " It is probably A "<< largestAreaColor<<" CIRCLE !!!!! " << std::endl;
 
         }
         else{
-             std::cout << " It is probably A RECTANGLE !!!!! " << std::endl;
+             std::cout << " It is probably A "<< largestAreaColor<<" RECTANGLE !!!!! " << std::endl;
         }
         cv::Rect objRect = cv::boundingRect(largestContour);
         objRect.x = std::max(0, objRect.x - rectPadding_);

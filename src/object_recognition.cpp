@@ -210,6 +210,8 @@ public:
                 cv_bridge::CvImage sendingmsg = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage);
                 evidence_msg.image_evidence = sendingmsg.toImageMsg().operator *();
                 evidence_pub.publish(evidence_msg);
+                evidence_pub.publish(evidence_msg);
+                evidence_pub.publish(evidence_msg);
                 speakresult(result);
                 lastobject = time;
                 working=false;
@@ -372,8 +374,8 @@ private:
     static const int sample_size_y = 100;
     static const int attributes = 1;
     static const float pcaaccuracy = 0.999;
-    static const bool save= true;
-    static const bool load= false;
+    static const bool save= false;
+    static const bool load= true;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
