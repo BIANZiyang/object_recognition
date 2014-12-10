@@ -17,7 +17,11 @@
 #include <ras_msgs/RAS_Evidence.h>
 #include <robot_msgs/imagePosition.h>
 #include <robot_msgs/detectedObject.h>
+#include <robot_msgs/recognitionActionAction.h>
+
 #include <image_transport/image_transport.h>
+
+#include <actionlib/server/simple_action_server.h>
 using std::cout;
 using std::endl;
 
@@ -26,7 +30,8 @@ using std::endl;
 class object_recognition {
 public:
     object_recognition() :
-        _it(nh){
+        _it(nh),
+      server(nh, "object_recognition", false){
         img_path_sub = nh.subscribe("/object_recognition/imgpath", 1, &object_recognition::imgFileCB, this);
         imagedir = "/home/ras/catkin_ws/src/object_recognition/sample_images/";
         //img_sub = _it.subscribe("/object_detection/object",1, &object_recognition::recognitionCB,this);
@@ -39,10 +44,29 @@ public:
         std::fill_n(alreadyseen,10,0);
         std::fill_n(lastobjects,2,0);
         std::fill_n(Point,3,0);
+        working=false;
+        train_knn();
+        server.registerGoalCallback(boost::bind(&object_recognition::goworking, this));
+        server.registerPreemptCallback(boost::bind(&object_recognition::stopworking, this));
+        server.start();
     }
 
 
 // ########################## Callbacks #############################
+    void goworking(){
+        working=true;
+	std::cout << "Got the comand to start working from main node " << std::endl;
+        server.acceptNewGoal();
+        //ros::Rate rate(1);
+
+        std::fill_n(lastobjects,2,0);
+        //server.setSucceeded();
+    }
+    void stopworking(){
+        working=false;
+        server.setPreempted();
+    }
+
     void imgFileCB(const std_msgs::String& pathToImg) {
         D(cout << "Classifying " << pathToImg.data << endl;)
         cv::Mat inputImg = cv::imread(pathToImg.data);
@@ -67,8 +91,9 @@ public:
             return;
         }
         //cout<< "loaded pointer"<< endl;
+        if(working){
         classification(cv_ptr->image);
-
+        }
     }
 // For Images with Poistion:
     void recognitionCBpos(const robot_msgs::imagePosition& img_msg){
@@ -90,8 +115,9 @@ public:
         Point[2]=img_msg.point.z;
         //cout<< "loaded pointer"<< endl;
         currentheader_= img_msg.header;
-        classification(cv_ptr->image);
-
+        if(working){
+            classification(cv_ptr->image);
+        }
 }
  // ########################### Classification ##############################
     void classification(cv::Mat inputImg){
@@ -120,50 +146,53 @@ public:
         cv::Mat neighborsclasses;
         cv::Mat neighborsdistant;
         kc.find_nearest(pcaRowImg, neighborcount, res,neighborsclasses,neighborsdistant);
-        float resbayes = bc.predict(pcaRowImg);
+        //float resbayes = bc.predict(pcaRowImg);
+
         int sureness=0;
         for(int i=0;i<neighborcount;i++){
             if(res.at<int>(0)==neighborsclasses.at<int>(0,i)){
                 sureness++;
             }
         }
-        D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
-        D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "   And Baysian said : " << intToDesc[resbayes]<<" Given color: "<< color << endl;)
+        //D(cout << "Amount of yes votes " << sureness << "  Out of "<< neighborcount<< endl;)
+        //D(cout << "K-Nearest neighbor said : " << intToDesc[res.at<float>(0)] << "  <<" Given color: "<< color << endl;)
         int resultid = res.at<float>(0);
         std::string result;
-        std::string resultbayes = intToDesc[resbayes];
+        //std::string resultbayes = intToDesc[resbayes];
         std::string resultkn =intToDesc[resultid];
         ros::Time time = ros::Time::now();
         int matchingcolorkn = resultkn.find(color);
-        int matchingcolorbayes = resultbayes.find(color);
-        if(resultid== resbayes && matchingcolorkn >=0){
+        //int matchingcolorbayes = resultbayes.find(color);
+        if(matchingcolorkn >=0){
             result= resultkn;
-            D(std::cout << "All 3 have agreed" << std::endl;)
+            //D(std::cout << "All 2 have agreed" << std::endl;)
         }
-        else if(resultid == resbayes){
-            result= resultkn;
-            D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
-        }
-        else if(matchingcolorbayes >=0 && matchingcolorkn >=0 ){
-            result = resultkn;
-            D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
-        }
-        else if(matchingcolorbayes >=0){
-            result = resultbayes;
-            resultid=resbayes;
-            D(std::cout << "Color and Bayes Agreed" << std::endl;)
-        }
-        else if(matchingcolorkn >=0){
-            result = resultkn;
-            D(std::cout << "Color and KNN Agreed" << std::endl;)
-        }
+//        else if(resultid == resbayes){
+//            result= resultkn;
+//            D(std::cout << " Bayes and KNN agreed, color was different" << std::endl;)
+//        }
+//        else if(matchingcolorbayes >=0 && matchingcolorkn >=0 ){
+//            result = resultkn;
+//            D(std::cout << "Color agree with both Bayes and KNN but different shape" << std::endl;)
+//        }
+//        else if(matchingcolorkn >=0){
+//            result = resultkn;
+//            D(std::cout << "Color and KNN Agreed" << std::endl;)
+//        }
+
+////        else if(matchingcolorbayes >=0){
+////            result = resultbayes;
+////            resultid=resbayes;
+////            D(std::cout << "Color and Bayes Agreed" << std::endl;)
+////        }
         else{
-            D(std::cout << "All 3 Classifier different " << std::endl;)
-            return;
+            //D(std::cout << "All 2 Classifier different " << std::endl;)
+            result = "Object";
+            resultid=-1;
         }
         if(0!=result.compare(("background")) && result.size()>0){
-            if(lastobjects[0]==resultid && lastobjects[1]==resultid || true){
-                alreadyseen[resultid]++;
+            if(lastobjects[0]==resultid && lastobjects[1]==resultid){
+                if(resultid!=-1) alreadyseen[resultid]++;
                 // Publishing Msg:
                 D(std::cout << "Detected an " << result << std::endl;)
                 robot_msgs::detectedObject detection_msgs;
@@ -181,8 +210,12 @@ public:
                 cv_bridge::CvImage sendingmsg = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage);
                 evidence_msg.image_evidence = sendingmsg.toImageMsg().operator *();
                 evidence_pub.publish(evidence_msg);
+                evidence_pub.publish(evidence_msg);
+                evidence_pub.publish(evidence_msg);
                 speakresult(result);
                 lastobject = time;
+                working=false;
+                server.setSucceeded();
 
                 }
             else{
@@ -190,16 +223,16 @@ public:
                 lastobjects[0]=resultid;
             }
         }
-//        else if(time.sec-lastobject.sec >5 ){
-//            ras_msgs::RAS_Evidence msg;
-//            msg.stamp =ros::Time::now();
-//            msg.object_id = "Object";
-//            msg.group_number = 3;
-//            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
-//            evidence_pub.publish(msg);
-//            speakresult("Object");
-//            lastobject = time;
-//        }
+        /*else if(time.sec-lastobject.sec >5 ){
+            ras_msgs::RAS_Evidence msg;
+            msg.stamp =ros::Time::now();
+            msg.object_id = "Object";
+            msg.group_number = 3;
+            msg.image_evidence = cv_bridge::CvImage(std_msgs::Header(),"bgr8",showimage).toImageMsg().operator *() ;
+            evidence_pub.publish(msg);
+            speakresult("Object");
+            lastobject = time;
+        }*/
 
     }
 
@@ -209,12 +242,39 @@ public:
  //############################## Train functions ####################################
 
     void trainPCA(cv::Mat& rowImg, cv::Mat& result){
-        std::cout << " Rows before PCA " << rowImg.cols << std::endl;
-        pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
-        pca.project(rowImg,result);
+        if(load){
+            cv::FileStorage fs1("/home/ras/catkin_ws/src/object_recognition/launch/pca.yml", cv::FileStorage::READ);
+            cv::Mat loadeigenvectors, loadeigenvalues , loadedmean;
+            fs1["Eigenvalues"] >> loadeigenvalues;
+            fs1["Eigenvector"] >> loadeigenvectors;
+            fs1["Mean"] >> loadedmean;
+            fs1.release();
+            pca.mean=loadedmean.clone();
+            pca.eigenvalues= loadeigenvalues.clone();
+            pca.eigenvectors=loadeigenvectors.clone();
+            pca.project(rowImg,result);
+            std::cout << "Loaded succesfull! Cols left : " << result.cols << std::endl;
+        }
+        else{
+            std::cout << " Rows before PCA " << rowImg.cols << std::endl;
+            pca = cv::PCA(rowImg,cv::Mat(), CV_PCA_DATA_AS_ROW,pcaaccuracy);
+            pca.project(rowImg,result);
 
-        std::cout << " Rows after PCA " << result.cols << std::endl;
+            std::cout << " Rows after PCA " << result.cols << std::endl;
+            if(save){
+                cv::FileStorage fs("/home/ras/catkin_ws/src/object_recognition/launch/pca.yml", cv::FileStorage::WRITE);
 
+                cv::Mat eigenval,eigenvec,mean;
+                mean=pca.mean.clone();
+                eigenval=pca.eigenvalues.clone();
+                eigenvec=pca.eigenvectors.clone();
+                fs << "Eigenvalues" << eigenval;
+                fs << "Eigenvector" << eigenvec;
+                fs << "Mean" << mean;
+                fs.release();
+
+            }
+        }
     }
 
     void train_BayesClassifier(cv::Mat& traindata,cv::Mat& responses){
@@ -242,7 +302,7 @@ public:
         kc.train(pcatrainData, responses);
 
         //BayesClassifier:
-        train_BayesClassifier(pcatrainData,responses);
+        //train_BayesClassifier(pcatrainData,responses);
 
         D(std::cout<< "Training succeded"<< std::endl;)
     }
@@ -314,6 +374,8 @@ private:
     static const int sample_size_y = 100;
     static const int attributes = 1;
     static const float pcaaccuracy = 0.999;
+    static const bool save= false;
+    static const bool load= true;
     std::map<int, std::string> intToDesc;
     std::string imagedir;
     cv::KNearest kc;
@@ -322,13 +384,14 @@ private:
     image_transport::Subscriber img_sub;
     ros::Time lastobject;
     std_msgs::Header currentheader_;
+    bool working;
+    actionlib::SimpleActionServer<robot_msgs::recognitionActionAction> server;
 };
 
 
 int main(int argc, char** argv){
     ros::init(argc, argv, "object_recognition");
     object_recognition object_rec;
-    object_rec.train_knn();
     ros::Rate rate(1);
     while(ros::ok()){
         ros::spinOnce();
