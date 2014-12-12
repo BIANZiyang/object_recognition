@@ -373,7 +373,7 @@ private:
     static const int sample_size_x = 100;
     static const int sample_size_y = 100;
     static const int attributes = 1;
-    static const float pcaaccuracy = 0.999;
+    static const float pcaaccuracy = 0.99;
     static const bool save= false;
     static const bool load= true;
     std::map<int, std::string> intToDesc;

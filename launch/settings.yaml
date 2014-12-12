@@ -17,8 +17,8 @@ object_detection:
         hmin: 113
         hmax: 166
         smin: 70
-        smax: 136
-        vmin: 121
+        smax: 255
+        vmin: 40
         vmax: 220
         updiffh: 0
         updiffs: 0
@@ -68,6 +68,7 @@ object_detection:
         lowdiffh: 105.1
         lowdiffs: 25.8
         lowdiffv: 212.7
+        includeinvalid: 0
     hsv4:
         color: red
         hmin: 150

@@ -31,7 +31,7 @@ typedef pcl::PointCloud<Point> Cloud;
 typedef pcl::PointXYZHSV PointHSV;
 typedef pcl::PointCloud<PointHSV> CloudHSV;
 
-#define USE_DEBUG
+//#define USE_DEBUG
 
 #ifdef USE_DEBUG
     #define DEBUG(X) X
@@ -134,11 +134,18 @@ public:
             return;
         }
 
+        cv::Mat depthMaskIncluded = cv::Mat::zeros(rows_, cols_, CV_8UC1);
+        cv::Mat depthMaskExcluded = cv::Mat::zeros(rows_, cols_, CV_8UC1);
         std::vector<int> indices;
-        cropDepthData(indices, false);
-        cv::Mat depthMask = cv::Mat::zeros(rows_, cols_, CV_8UC1);
+        cropDepthData(indices, true);
         for(size_t i = 0; i < indices.size(); ++i) {
-            depthMask.at<char>(indices[i]) = 255;
+            depthMaskIncluded.at<char>(indices[i]) = 255;
+        }
+
+        indices.clear();
+        cropDepthData(indices, false);
+        for(size_t i = 0; i < indices.size(); ++i) {
+            depthMaskExcluded.at<char>(indices[i]) = 255;
         }
 
         cv::Mat HSVmask;
@@ -147,8 +154,8 @@ public:
         cv::medianBlur(currentImagePtr_->image, blurredImage, 9);
 
 #ifdef DCB
-        cv::imshow("Depth filter", depthMask);
-       // cv::imshow("Blurred image", blurredImage);
+        //cv::imshow("Depth filter", depthMaskExcluded);
+        cv::imshow("Blurred image", blurredImage);
         cv::Mat savedHSVMask;
         cv::Mat saveCombinedMask;
 #endif
@@ -164,7 +171,7 @@ public:
 
 #ifdef DCB
             if(i == selectedHsvRange_) {
-                cv::imshow("HSV filter", HSVmask);
+               cv::imshow("HSV filter", HSVmask);
             }
 #endif
 
@@ -172,7 +179,12 @@ public:
                 cv::bitwise_not(HSVmask, HSVmask);
             }
 
-            combinedMask = HSVmask & depthMask;
+            if(hsvRanges_[i].includeInvalid) {
+                combinedMask = HSVmask & depthMaskIncluded;
+            } else {
+                combinedMask = HSVmask & depthMaskExcluded;
+            }
+
             std::vector<std::vector<cv::Point> > contours;
             std::vector<cv::Vec4i> notUsedHierarchy;
 
@@ -236,6 +248,9 @@ public:
         objectCloud.is_dense=false;
         pcl::removeNaNFromPointCloud(objectCloud,withoutNan,indicies);
         DEBUG(std::cout<< "Got Pointcloud with "<< withoutNan.points.size()  << "  Points after removing NaN" << std::endl;)
+	if(withoutNan.points.size() < 50){
+		return;
+	}
         pcl::compute3DCentroid(objectCloud, massCenter);
 
         DEBUG(std::cout<< "Got massCenter " << massCenter<<std::endl;)
@@ -256,7 +271,10 @@ public:
         else{
              std::cout << " It is probably A "<< largestAreaColor<<" RECTANGLE !!!!! " << std::endl;
         }
+
         cv::Rect objRect = cv::boundingRect(largestContour);
+
+#ifdef DCB
         cv::Point objCenter(objRect.x + objRect.width/2, objRect.y + objRect.height/2);
         cv::Mat floodMask = cv::Mat::zeros(rows_+2, cols_+2, CV_8UC1);
         hsvRange& cr = hsvRanges_[largestIndex];
@@ -265,9 +283,7 @@ public:
         cv::floodFill(blurredImage, floodMask, objCenter, cv::Scalar(0, 0, 0), NULL, lowDiff, upDiff, 8 | CV_FLOODFILL_FIXED_RANGE | CV_FLOODFILL_MASK_ONLY | 255 << 8);
         cv::medianBlur(floodMask, floodMask, 3);
         cv::circle(floodMask, objCenter, 3, cv::Scalar(128, 0, 0), 2);
-
-#ifdef DCB
-        cv::imshow("Flood mask", floodMask);
+        //cv::imshow("Flood mask", floodMask);
 #endif
 
         objRect.x = std::max(0, objRect.x - rectPadding_);
@@ -336,6 +352,7 @@ private:
         cv::Scalar max;
 
         bool inverted;
+	bool includeInvalid;
         double& hmin;
         double& smin;
         double& vmin;
@@ -399,6 +416,8 @@ private:
 
             getParam(ss.str() + "/color", hsvRanges_[i].color, "");
             getParam(ss.str() + "/inverted", hsvRanges_[i].inverted, false);
+            getParam(ss.str() + "/includeinvalid", hsvRanges_[i].includeInvalid, true);
+
         }
     }
 
